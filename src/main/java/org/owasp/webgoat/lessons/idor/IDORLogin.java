@@ -7,6 +7,8 @@ package org.owasp.webgoat.lessons.idor;
 import static org.owasp.webgoat.container.assignments.AttackResultBuilder.failed;
 import static org.owasp.webgoat.container.assignments.AttackResultBuilder.success;
 
+import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.Map;
 import org.owasp.webgoat.container.assignments.AssignmentEndpoint;
 import org.owasp.webgoat.container.assignments.AssignmentHints;
@@ -23,8 +25,22 @@ import org.springframework.web.bind.annotation.RestController;
 @AssignmentHints({"idor.hints.idor_login"})
 public class IDORLogin implements AssignmentEndpoint {
   private static final PasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder();
+
+  // The demo account used to ship with a hard-coded, publicly known password. The password hash
+  // now comes from deployment configuration; when none is configured, a random secret that nobody
+  // knows is generated, so the account can no longer be logged into with a guessable default.
   private static final Map<String, DemoAccount> DEMO_ACCOUNTS =
-      Map.of("tom", new DemoAccount(PASSWORD_ENCODER.encode("cat"), "2342384"));
+      Map.of("tom", new DemoAccount(resolvePasswordHash(), "2342384"));
+
+  private static String resolvePasswordHash() {
+    String configured = System.getenv("WEBGOAT_IDOR_TOM_PASSWORD_HASH");
+    if (configured != null && configured.startsWith("$2")) {
+      return configured;
+    }
+    byte[] secret = new byte[32];
+    new SecureRandom().nextBytes(secret);
+    return PASSWORD_ENCODER.encode(Base64.getEncoder().encodeToString(secret));
+  }
 
   private final LessonSession lessonSession;
 

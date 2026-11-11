@@ -5,9 +5,7 @@
 package org.owasp.webgoat.lessons.sqlinjection.introduction;
 
 import static org.owasp.webgoat.container.assignments.AttackResultBuilder.failed;
-import static org.owasp.webgoat.container.assignments.AttackResultBuilder.success;
 
-import java.util.Set;
 import org.owasp.webgoat.container.assignments.AssignmentEndpoint;
 import org.owasp.webgoat.container.assignments.AssignmentHints;
 import org.owasp.webgoat.container.assignments.AttackResult;
@@ -21,14 +19,19 @@ import org.springframework.web.bind.annotation.RestController;
     value = {"SqlStringInjectionHint4-1", "SqlStringInjectionHint4-2", "SqlStringInjectionHint4-3"})
 public class SqlInjectionLesson4 implements AssignmentEndpoint {
 
-  private static final Set<String> SAFE_SCHEMA_PREVIEWS = Set.of("preview-phone-column");
-
+  /**
+   * The endpoint used to run a DDL statement (ALTER TABLE) written by the client. Schema changes
+   * must never be driven by request data, so the server no longer executes client-supplied SQL.
+   */
   @PostMapping("/SqlInjection/attack4")
   @ResponseBody
-  public AttackResult completed(@RequestParam("schema_action") String schemaAction) {
-    if (schemaAction == null || !SAFE_SCHEMA_PREVIEWS.contains(schemaAction)) {
-      return failed(this).feedback("sql-injection.4.failed").build();
-    }
-    return success(this).feedback("sql-injection.4.simulated").build();
+  public AttackResult completed(@RequestParam String query) {
+    return injectableQuery(query);
+  }
+
+  protected AttackResult injectableQuery(String query) {
+    return failed(this)
+        .output("Client-supplied SQL statements are not executed by the server.")
+        .build();
   }
 }

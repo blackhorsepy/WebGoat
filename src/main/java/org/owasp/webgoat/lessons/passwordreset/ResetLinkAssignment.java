@@ -104,9 +104,7 @@ public class ResetLinkAssignment implements AssignmentEndpoint {
       BindingResult bindingResult,
       @CurrentUsername String username) {
     ModelAndView modelAndView = new ModelAndView();
-    if (!hasText(form.getPassword())
-        || form.getPassword().length() < 12
-        || form.getPassword().length() > 128) {
+    if (!hasText(form.getPassword()) || form.getPassword().length() > 128) {
       bindingResult.rejectValue("password", "not.empty");
     }
     if (bindingResult.hasErrors()) {

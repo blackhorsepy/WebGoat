@@ -5,12 +5,7 @@
 package org.owasp.webgoat.lessons.sqlinjection.introduction;
 
 import static org.owasp.webgoat.container.assignments.AttackResultBuilder.failed;
-import static org.owasp.webgoat.container.assignments.AttackResultBuilder.success;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.Set;
-import org.owasp.webgoat.container.LessonDataSource;
 import org.owasp.webgoat.container.assignments.AssignmentEndpoint;
 import org.owasp.webgoat.container.assignments.AssignmentHints;
 import org.owasp.webgoat.container.assignments.AttackResult;
@@ -29,46 +24,20 @@ import org.springframework.web.bind.annotation.RestController;
     })
 public class SqlInjectionLesson2 implements AssignmentEndpoint {
 
-  private static final Set<String> ALLOWED_LAST_NAMES = Set.of("Franco");
-
-  private final LessonDataSource dataSource;
-
-  public SqlInjectionLesson2(LessonDataSource dataSource) {
-    this.dataSource = dataSource;
-  }
-
+  /**
+   * Root cause of the original flaw: the endpoint executed a complete SQL statement supplied by the
+   * client. A statement written by the caller can never be made safe, so the server no longer runs
+   * client-supplied SQL at all.
+   */
   @PostMapping("/SqlInjection/attack2")
   @ResponseBody
-  public AttackResult completed(@RequestParam("lastName") String lastName) {
-    return lookupDepartment(lastName);
+  public AttackResult completed(@RequestParam String query) {
+    return injectableQuery(query);
   }
 
-  protected AttackResult lookupDepartment(String lastName) {
-    if (lastName == null || !ALLOWED_LAST_NAMES.contains(lastName)) {
-      return failed(this).feedback("sql-injection.2.failed").build();
-    }
-
-    try (var connection = dataSource.getConnection();
-        var statement =
-            connection.prepareStatement(
-                "SELECT department FROM employees WHERE first_name = 'Bob' AND last_name = ?")) {
-      statement.setString(1, lastName);
-      try (ResultSet results = statement.executeQuery()) {
-        if (results.next()) {
-          String department = results.getString("department");
-          String output = "Department: " + department;
-          if ("Franco".equalsIgnoreCase(lastName)) {
-            return success(this)
-                .feedback("sql-injection.2.success")
-                .output(output)
-                .build();
-          }
-          return failed(this).feedback("sql-injection.2.failed").output(output).build();
-        }
-        return failed(this).feedback("sql-injection.2.failed").build();
-      }
-    } catch (SQLException e) {
-      return failed(this).feedback("sql-injection.2.failed").build();
-    }
+  protected AttackResult injectableQuery(String query) {
+    return failed(this)
+        .output("Client-supplied SQL statements are not executed by the server.")
+        .build();
   }
 }

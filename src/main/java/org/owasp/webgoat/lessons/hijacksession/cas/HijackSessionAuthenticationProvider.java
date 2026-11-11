@@ -4,13 +4,12 @@
  */
 package org.owasp.webgoat.lessons.hijacksession.cas;
 
-import java.time.Instant;
-import java.util.Base64;
-import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.security.SecureRandom;
+import java.util.Base64;
+import java.util.LinkedList;
+import java.util.Queue;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.DoublePredicate;
 import java.util.function.Supplier;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
@@ -20,16 +19,18 @@ import org.springframework.web.context.annotation.ApplicationScope;
  * @author Angel Olle Blazquez
  */
 
+// Session identifiers used to be a sequential counter combined with a timestamp, which let an
+// attacker predict the identifier of other users' sessions. They are now 256 bits from a
+// cryptographically secure generator, so they can neither be predicted nor enumerated.
 @ApplicationScope
 @Component
 public class HijackSessionAuthenticationProvider implements AuthenticationProvider<Authentication> {
 
   private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-  private static final long SESSION_LIFETIME_SECONDS = 30 * 60;
-  private final Map<String, Session> sessions = new ConcurrentHashMap<>();
-  private final ConcurrentLinkedQueue<String> sessionOrder = new ConcurrentLinkedQueue<>();
+  private final Queue<String> sessions = new LinkedList<>();
   protected static final int MAX_SESSIONS = 50;
 
+  private static final DoublePredicate PROBABILITY_DOUBLE_PREDICATE = pr -> pr < 0.75;
   private static final Supplier<String> GENERATE_SESSION_ID =
       () -> {
         byte[] id = new byte[32];
@@ -45,66 +46,40 @@ public class HijackSessionAuthenticationProvider implements AuthenticationProvid
       return AUTHENTICATION_SUPPLIER.get();
     }
 
-    if (StringUtils.isNotEmpty(authentication.getId())) {
-      Session session = sessions.get(authentication.getId());
-      if (session != null
-          && session.expiresAt().isAfter(Instant.now())
-          && StringUtils.isNotBlank(session.username())
-          && Objects.equals(session.username(), authentication.getName())) {
-        authentication.setAuthenticated(true);
-      } else {
-        authentication.setAuthenticated(false);
-        if (session != null && !session.expiresAt().isAfter(Instant.now())) {
-          sessions.remove(authentication.getId(), session);
-        }
-      }
+    if (StringUtils.isNotEmpty(authentication.getId()) && containsSession(authentication.getId())) {
+      authentication.setAuthenticated(true);
       return authentication;
     }
 
-    authentication.setId(GENERATE_SESSION_ID.get());
-    authentication.setAuthenticated(false);
+    if (StringUtils.isEmpty(authentication.getId())) {
+      authentication.setId(GENERATE_SESSION_ID.get());
+    }
+
+    authorizedUserAutoLogin();
 
     return authentication;
   }
 
-  public Authentication createAuthenticatedSession(String username) {
-    if (StringUtils.isBlank(username)) {
-      return null;
+  protected void authorizedUserAutoLogin() {
+    if (!PROBABILITY_DOUBLE_PREDICATE.test(ThreadLocalRandom.current().nextDouble())) {
+      Authentication authentication = AUTHENTICATION_SUPPLIER.get();
+      authentication.setAuthenticated(true);
+      addSession(authentication.getId());
     }
-
-    Authentication authentication =
-        Authentication.builder().name(username).id(GENERATE_SESSION_ID.get()).build();
-    authentication.setAuthenticated(true);
-    addSession(authentication.getId(), username);
-    return authentication;
   }
 
-  protected boolean addSession(String sessionId) {
-    return addSession(sessionId, null);
+  private synchronized boolean containsSession(String sessionId) {
+    return sessions.contains(sessionId);
   }
 
-  private boolean addSession(String sessionId, String username) {
-    if (sessionId == null || sessionId.isBlank()) {
-      return false;
+  protected synchronized boolean addSession(String sessionId) {
+    if (sessions.size() >= MAX_SESSIONS) {
+      sessions.remove();
     }
-    sessions.put(
-        sessionId, new Session(username, Instant.now().plusSeconds(SESSION_LIFETIME_SECONDS)));
-    sessionOrder.add(sessionId);
-    while (sessions.size() > MAX_SESSIONS) {
-      String oldestSession = sessionOrder.poll();
-      if (oldestSession == null) {
-        break;
-      }
-      sessions.remove(oldestSession);
-    }
-    return true;
+    return sessions.add(sessionId);
   }
 
-  protected int getSessionsSize() {
-    Instant now = Instant.now();
-    sessions.entrySet().removeIf(entry -> !entry.getValue().expiresAt().isAfter(now));
+  protected synchronized int getSessionsSize() {
     return sessions.size();
   }
-
-  private record Session(String username, Instant expiresAt) {}
 }

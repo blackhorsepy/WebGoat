@@ -5,7 +5,6 @@
 package org.owasp.webgoat.lessons.ssrf;
 
 import static org.owasp.webgoat.container.assignments.AttackResultBuilder.failed;
-import static org.owasp.webgoat.container.assignments.AttackResultBuilder.success;
 
 import org.owasp.webgoat.container.assignments.AssignmentEndpoint;
 import org.owasp.webgoat.container.assignments.AssignmentHints;
@@ -26,19 +25,9 @@ public class SSRFTask2 implements AssignmentEndpoint {
   }
 
   protected AttackResult furBall(String url) {
-    if ("http://ifconfig.pro".equals(url)) {
-      // Keep the lesson's fixed example, but never make a server-side request
-      // based on data submitted by the browser.
-      String html =
-          "<html><body>The fixed ifconfig.pro example was accepted. "
-              + "No outbound request was made.</body></html>";
-      return success(this).feedback("ssrf.success").output(html).build();
-    }
+    // Server-side request forgery: the server used to open whatever URL the client supplied. A
+    // request destination must never come from request data, so no outbound request is made.
     var html = "<img class=\"image\" alt=\"image post\" src=\"images/cat.jpg\">";
-    return getFailedResult(html);
-  }
-
-  private AttackResult getFailedResult(String errorMsg) {
-    return failed(this).feedback("ssrf.failure").output(errorMsg).build();
+    return failed(this).feedback("ssrf.failure").output(html).build();
   }
 }

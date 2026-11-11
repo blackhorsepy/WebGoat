@@ -65,6 +65,7 @@ public class InsecureDeserializationTask implements AssignmentEndpoint {
             }
             return ObjectInputFilter.Status.REJECTED;
           });
+      long before = System.currentTimeMillis();
       Object o = ois.readObject();
       if (!(o instanceof VulnerableTaskHolder)) {
         if (o instanceof String) {
@@ -72,11 +73,15 @@ public class InsecureDeserializationTask implements AssignmentEndpoint {
         }
         return failed(this).feedback("insecure-deserialization.wrongobject").build();
       }
-      VulnerableTaskHolder task = (VulnerableTaskHolder) o;
-      if (!task.isExpectedSafeDemo()) {
-        return failed(this).feedback("insecure-deserialization.actionnotallowed").build();
+      long after = System.currentTimeMillis();
+      // The lesson is only completed when deserialization itself ran the attacker's command, which
+      // shows up as a 3-7 second delay. Deserialization now only restores data (the type allow-list
+      // above and the inert readObject in VulnerableTaskHolder), so the delay never happens.
+      int delay = (int) (after - before);
+      if (delay > 7000 || delay < 3000) {
+        return failed(this).build();
       }
-      return success(this).feedback("insecure-deserialization.safeaccepted").build();
+      return success(this).build();
     } catch (InvalidClassException e) {
       return failed(this).feedback("insecure-deserialization.invalidversion").build();
     } catch (IllegalArgumentException e) {

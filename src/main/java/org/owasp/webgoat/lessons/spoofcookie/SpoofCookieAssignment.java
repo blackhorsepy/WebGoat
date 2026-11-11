@@ -76,6 +76,13 @@ public class SpoofCookieAssignment implements AssignmentEndpoint {
   private AttackResult credentialsLoginFlow(
       String username, String password, HttpServletResponse response) {
     String lowerCasedUsername = username.toLowerCase(Locale.ROOT);
+    // The victim account must never obtain a legitimate session through the credentials flow: its
+    // password is known to the lesson, so the only way to reach it would be a forged cookie.
+    if (ATTACK_USERNAME.equals(lowerCasedUsername)
+        && users.get(lowerCasedUsername).equals(password)) {
+      return informationMessage(this).feedback("spoofcookie.cheating").build();
+    }
+
     String authPassword = users.getOrDefault(lowerCasedUsername, "");
     if (!authPassword.isBlank() && authPassword.equals(password)) {
       String newCookieValue = EncDec.encode(lowerCasedUsername);

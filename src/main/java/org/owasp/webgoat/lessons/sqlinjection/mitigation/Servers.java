@@ -69,7 +69,8 @@ public class Servers {
     try (var connection = dataSource.getConnection()) {
       try (var statement =
           connection.prepareStatement(
-              "select id, hostname, ip, mac, status, description from SERVERS order by "
+              "select id, hostname, ip, mac, status, description from SERVERS where status <> 'out"
+                  + " of order' order by "
                   + sortColumn)) {
         try (var rs = statement.executeQuery()) {
           while (rs.next()) {

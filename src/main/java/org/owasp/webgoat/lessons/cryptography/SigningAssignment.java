@@ -55,9 +55,9 @@ public class SigningAssignment implements AssignmentEndpoint {
   @PostMapping("/crypto/signing/verify")
   @ResponseBody
   public AttackResult completed(
-      HttpServletRequest request, @RequestParam String modulus) {
+      HttpServletRequest request, @RequestParam String modulus, @RequestParam String signature) {
     KeyPair keyPair = (KeyPair) request.getSession().getAttribute("keyPair");
-    if (keyPair == null || modulus == null) {
+    if (keyPair == null || modulus == null || signature == null) {
       return failed(this).feedback("crypto-signing.notok").build();
     }
 
@@ -75,6 +75,13 @@ public class SigningAssignment implements AssignmentEndpoint {
       log.warn("public key modulus did not match the session key");
       return failed(this).feedback("crypto-signing.modulusnotok").build();
     }
-    return success(this).feedback("crypto-signing.success").build();
+    // The submitted modulus is public information. Only a signature produced with the private key,
+    // which never leaves the server, proves possession of the key: verify it against the original
+    // modulus string, as the signed message.
+    if (CryptoUtil.verifyMessage(modulus, signature, keyPair.getPublic())) {
+      return success(this).feedback("crypto-signing.success").build();
+    }
+    log.warn("signature incorrect");
+    return failed(this).feedback("crypto-signing.notok").build();
   }
 }
