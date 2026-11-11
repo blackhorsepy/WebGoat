@@ -11,4 +11,4 @@ If an attacker successfully "injects" DCL type SQL commands into a database, he 
 
 
 The conceptual example is `GRANT SELECT ON grant_rights TO unauthorized_user;`.
-This page is a read-only simulation. WebGoat does not accept or execute DCL supplied through the form, and no database permissions will be changed. Select the button to acknowledge the example; privilege changes must be handled by trusted database administration code.
+This page is a read-only simulation. WebGoat does not accept or execute DCL supplied through the form, and no database permissions will be changed. Select the `GRANT SELECT` preview to acknowledge the example; privilege changes must be handled by trusted database administration code.

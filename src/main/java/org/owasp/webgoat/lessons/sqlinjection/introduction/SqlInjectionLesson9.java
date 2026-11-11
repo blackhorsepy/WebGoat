@@ -44,10 +44,10 @@ public class SqlInjectionLesson9 implements AssignmentEndpoint {
   @PostMapping("/SqlInjection/attack9")
   @ResponseBody
   public AttackResult completed(
-      @RequestParam String name,
-      @RequestParam String auth_tan,
-      @RequestParam String salary_action) {
-    return simulateSalaryReview(name, auth_tan, salary_action);
+      @RequestParam("name") String name,
+      @RequestParam("auth_tan") String authTan,
+      @RequestParam("salary_action") String salaryAction) {
+    return simulateSalaryReview(name, authTan, salaryAction);
   }
 
   protected AttackResult simulateSalaryReview(String name, String authTan, String salaryAction) {

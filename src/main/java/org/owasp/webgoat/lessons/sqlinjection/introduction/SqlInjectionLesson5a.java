@@ -35,7 +35,7 @@ public class SqlInjectionLesson5a implements AssignmentEndpoint {
 
   @PostMapping("/SqlInjection/assignment5a")
   @ResponseBody
-  public AttackResult completed(@RequestParam String account) {
+  public AttackResult completed(@RequestParam("account") String account) {
     return lookupAccount(account);
   }
 

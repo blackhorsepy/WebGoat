@@ -44,7 +44,7 @@ public class SqlInjectionLesson13 implements AssignmentEndpoint {
 
   @PostMapping("/SqlInjectionMitigations/attack12a")
   @ResponseBody
-  public AttackResult completed(@RequestParam String ip) {
+  public AttackResult completed(@RequestParam("ip") String ip) {
     if (!isValidIpv4Address(ip)) {
       return failed(this).build();
     }

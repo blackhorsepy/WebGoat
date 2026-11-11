@@ -93,6 +93,11 @@
               th:action="@{/SqlInjection/attack5}"
               autocomplete="off">
             <p th:text="#{sql-injection.5.notice}">Read-only simulation. No DCL statement will be executed and no database permissions will change.</p>
+            <label for="privilege-preview" th:text="#{sql-injection.5.operation}">Privilege example</label>
+            <select id="privilege-preview" name="privilege_action" required="required">
+                <option value="" selected="selected" disabled="disabled" th:text="#{sql-injection.5.operation.choose}">Choose an example</option>
+                <option value="preview-select-grant" th:text="#{sql-injection.5.operation.preview}">Preview a SELECT grant</option>
+            </select>
             <button type="SUBMIT" th:text="#{sql-injection.5.submit}">Show privilege simulation</button>
         </form>
         <div class="attack-feedback"></div>

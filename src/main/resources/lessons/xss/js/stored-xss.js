@@ -8,11 +8,22 @@ $(document).ready(function () {
             contentType: "application/json",
             dataType: 'json'
         }).then(
-            function () {
+            function (result) {
+                if (result.feedback) {
+                    $('#stored-comment-feedback').text(polyglot.t(result.feedback) || '');
+                }
+                if (result.attemptWasMade && (result.assignmentCompleted || result.lessonCompleted)) {
+                    $('#stored-comment-assignment i').removeClass('hidden');
+                }
+                if (result.feedback === 'xss-stored-comment-invalid') {
+                    return;
+                }
                 getChallenges();
                 $("#commentInput").val('');
             }
-        )
+        ).fail(function () {
+            $('#stored-comment-feedback').text('The comment could not be saved. Please try again.');
+        });
     })
 
     var html = '<li class="comment">' +

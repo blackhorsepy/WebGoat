@@ -10,6 +10,7 @@ import static org.owasp.webgoat.container.assignments.AttackResultBuilder.succes
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.commons.lang3.StringUtils;
+import org.owasp.webgoat.container.CurrentUsername;
 import org.owasp.webgoat.container.assignments.AssignmentEndpoint;
 import org.owasp.webgoat.container.assignments.AssignmentHints;
 import org.owasp.webgoat.container.assignments.AttackResult;
@@ -17,7 +18,6 @@ import org.owasp.webgoat.lessons.hijacksession.cas.Authentication;
 import org.owasp.webgoat.lessons.hijacksession.cas.HijackSessionAuthenticationProvider;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -47,21 +47,31 @@ public class HijackSessionAssignment implements AssignmentEndpoint {
   @PostMapping(path = "/HijackSession/login")
   @ResponseBody
   public AttackResult login(
-      @RequestParam String username,
-      @RequestParam String password,
+      @CurrentUsername String currentUsername,
       @CookieValue(value = COOKIE_NAME, required = false) String cookieValue,
       HttpServletResponse response) {
 
-    Authentication authentication;
-    if (StringUtils.isEmpty(cookieValue)) {
-      authentication =
-          provider.authenticate(
-              Authentication.builder().name(username).credentials(password).build());
-      setCookie(response, authentication.getId());
-    } else {
-      authentication = provider.authenticate(Authentication.builder().id(cookieValue).build());
+    if (StringUtils.isBlank(currentUsername)) {
+      return failed(this).build();
     }
 
+    Authentication authentication = null;
+    if (StringUtils.isNotEmpty(cookieValue)) {
+      authentication =
+          provider.authenticate(
+              Authentication.builder().name(currentUsername).id(cookieValue).build());
+    }
+
+    // Reuse a valid session owned by this WebGoat account. Invalid, expired, or another
+    // account's cookie receives a fresh random session for the signed-in account.
+    if (authentication == null || !authentication.isAuthenticated()) {
+      authentication = provider.createAuthenticatedSession(currentUsername);
+    }
+    if (authentication == null) {
+      return failed(this).build();
+    }
+
+    setCookie(response, authentication.getId());
     if (authentication.isAuthenticated()) {
       return success(this).build();
     }

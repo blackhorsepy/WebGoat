@@ -34,7 +34,7 @@ public class SqlInjectionLesson3 implements AssignmentEndpoint {
 
   @PostMapping("/SqlInjection/attack3")
   @ResponseBody
-  public AttackResult completed(@RequestParam String department) {
+  public AttackResult completed(@RequestParam("department") String department) {
     return updateTobiBarnettDepartment(department);
   }
 

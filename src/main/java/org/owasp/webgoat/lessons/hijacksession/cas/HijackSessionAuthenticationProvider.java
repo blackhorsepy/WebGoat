@@ -7,11 +7,10 @@ package org.owasp.webgoat.lessons.hijacksession.cas;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ThreadLocalRandom;
 import java.security.SecureRandom;
-import java.util.function.DoublePredicate;
 import java.util.function.Supplier;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
@@ -27,11 +26,10 @@ public class HijackSessionAuthenticationProvider implements AuthenticationProvid
 
   private static final SecureRandom SECURE_RANDOM = new SecureRandom();
   private static final long SESSION_LIFETIME_SECONDS = 30 * 60;
-  private final Map<String, Instant> sessions = new ConcurrentHashMap<>();
+  private final Map<String, Session> sessions = new ConcurrentHashMap<>();
   private final ConcurrentLinkedQueue<String> sessionOrder = new ConcurrentLinkedQueue<>();
   protected static final int MAX_SESSIONS = 50;
 
-  private static final DoublePredicate PROBABILITY_DOUBLE_PREDICATE = pr -> pr < 0.75;
   private static final Supplier<String> GENERATE_SESSION_ID =
       () -> {
         byte[] id = new byte[32];
@@ -48,33 +46,49 @@ public class HijackSessionAuthenticationProvider implements AuthenticationProvid
     }
 
     if (StringUtils.isNotEmpty(authentication.getId())) {
-      Instant expiresAt = sessions.get(authentication.getId());
-      if (expiresAt != null && expiresAt.isAfter(Instant.now())) {
+      Session session = sessions.get(authentication.getId());
+      if (session != null
+          && session.expiresAt().isAfter(Instant.now())
+          && StringUtils.isNotBlank(session.username())
+          && Objects.equals(session.username(), authentication.getName())) {
         authentication.setAuthenticated(true);
-      } else if (expiresAt != null) {
-        sessions.remove(authentication.getId(), expiresAt);
+      } else {
+        authentication.setAuthenticated(false);
+        if (session != null && !session.expiresAt().isAfter(Instant.now())) {
+          sessions.remove(authentication.getId(), session);
+        }
       }
       return authentication;
     }
 
     authentication.setId(GENERATE_SESSION_ID.get());
-    authorizedUserAutoLogin(authentication);
+    authentication.setAuthenticated(false);
 
     return authentication;
   }
 
-  protected void authorizedUserAutoLogin(Authentication authentication) {
-    if (!PROBABILITY_DOUBLE_PREDICATE.test(ThreadLocalRandom.current().nextDouble())) {
-      authentication.setAuthenticated(true);
-      addSession(authentication.getId());
+  public Authentication createAuthenticatedSession(String username) {
+    if (StringUtils.isBlank(username)) {
+      return null;
     }
+
+    Authentication authentication =
+        Authentication.builder().name(username).id(GENERATE_SESSION_ID.get()).build();
+    authentication.setAuthenticated(true);
+    addSession(authentication.getId(), username);
+    return authentication;
   }
 
   protected boolean addSession(String sessionId) {
+    return addSession(sessionId, null);
+  }
+
+  private boolean addSession(String sessionId, String username) {
     if (sessionId == null || sessionId.isBlank()) {
       return false;
     }
-    sessions.put(sessionId, Instant.now().plusSeconds(SESSION_LIFETIME_SECONDS));
+    sessions.put(
+        sessionId, new Session(username, Instant.now().plusSeconds(SESSION_LIFETIME_SECONDS)));
     sessionOrder.add(sessionId);
     while (sessions.size() > MAX_SESSIONS) {
       String oldestSession = sessionOrder.poll();
@@ -88,7 +102,9 @@ public class HijackSessionAuthenticationProvider implements AuthenticationProvid
 
   protected int getSessionsSize() {
     Instant now = Instant.now();
-    sessions.entrySet().removeIf(entry -> !entry.getValue().isAfter(now));
+    sessions.entrySet().removeIf(entry -> !entry.getValue().expiresAt().isAfter(now));
     return sessions.size();
   }
+
+  private record Session(String username, Instant expiresAt) {}
 }

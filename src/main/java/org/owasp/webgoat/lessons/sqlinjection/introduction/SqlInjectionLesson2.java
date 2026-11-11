@@ -39,7 +39,7 @@ public class SqlInjectionLesson2 implements AssignmentEndpoint {
 
   @PostMapping("/SqlInjection/attack2")
   @ResponseBody
-  public AttackResult completed(@RequestParam String lastName) {
+  public AttackResult completed(@RequestParam("lastName") String lastName) {
     return lookupDepartment(lastName);
   }
 

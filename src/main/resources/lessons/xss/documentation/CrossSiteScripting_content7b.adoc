@@ -1,5 +1,5 @@
 See the comments below.
 
-Add a comment containing the JavaScript-looking text shown in this lesson. The patched comment list renders it as text and does not call _webgoat.customjs.phoneHome_.
+Enter the literal text `<script>webgoat.customjs.phoneHome()</script>` as a comment. The patched comment list renders it as text and does not call _webgoat.customjs.phoneHome_.
 
 The browser does not execute stored input. To continue, use the explicit lesson phone-home function and submit its latest response in the follow-up exercise.

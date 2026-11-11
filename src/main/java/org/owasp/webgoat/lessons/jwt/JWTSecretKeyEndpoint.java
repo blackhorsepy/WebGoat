@@ -31,7 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class JWTSecretKeyEndpoint implements AssignmentEndpoint {
 
   private static final byte[] JWT_SECRET = newSecret();
-  private static final String WEBGOAT_USER = "WebGoat";
+  private static final String SAMPLE_USER = "Tom";
   private static final String ISSUER = "WebGoat Token Builder";
   private static final String AUDIENCE = "webgoat.org";
   private static final List<String> expectedClaims =
@@ -76,7 +76,7 @@ public class JWTSecretKeyEndpoint implements AssignmentEndpoint {
       } else {
         String user = claims.get("username", String.class);
 
-        if (WEBGOAT_USER.equals(user)) {
+        if (SAMPLE_USER.equals(user)) {
           return success(this).build();
         } else {
           return failed(this).feedback("jwt-secret-incorrect-user").feedbackArgs(user).build();
