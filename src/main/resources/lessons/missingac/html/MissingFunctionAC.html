@@ -35,7 +35,7 @@
                                 <li><a href="#">Compose Message</a></li>
                             </ul>
                         </li>
-                        <li class="dropdown" sec:authorize="hasAnyAuthority('ROLE_ADMIN','ADMIN')">
+                        <li class="dropdown" sec:authorize="hasAuthority('WEBGOAT_ADMIN')">
                             <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Admin<span class="caret"></span></a>
                             <ul class="dropdown-menu" aria-labelledby="admin">
                                 <li><a href="access-control/users-admin-fix">Users</a></li>

@@ -62,21 +62,20 @@ public class HijackSessionAssignment implements AssignmentEndpoint {
               Authentication.builder().name(currentUsername).id(cookieValue).build());
     }
 
-    // Reuse a valid session owned by this WebGoat account. Invalid, expired, or another
-    // account's cookie receives a fresh random session for the signed-in account.
-    if (authentication == null || !authentication.isAuthenticated()) {
-      authentication = provider.createAuthenticatedSession(currentUsername);
-    }
-    if (authentication == null) {
-      return failed(this).build();
-    }
-
-    setCookie(response, authentication.getId());
-    if (authentication.isAuthenticated()) {
+    // A new server-owned session can be issued after a missing or invalid cookie, but that
+    // request must not count as proof that the submitted cookie authenticated successfully.
+    if (authentication != null && authentication.isAuthenticated()) {
+      setCookie(response, authentication.getId());
       return success(this).build();
     }
 
-    return failed(this).build();
+    Authentication freshSession = provider.createAuthenticatedSession(currentUsername);
+    if (freshSession == null) {
+      return failed(this).build();
+    }
+
+    setCookie(response, freshSession.getId());
+    return failed(this).feedback("hijacksession.sessionissued").build();
   }
 
   private void setCookie(HttpServletResponse response, String cookieValue) {

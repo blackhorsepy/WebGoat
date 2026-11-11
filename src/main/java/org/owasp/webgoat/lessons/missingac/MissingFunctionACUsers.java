@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.owasp.webgoat.container.users.WebGoatUser;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -124,8 +125,6 @@ public class MissingFunctionACUsers {
         && authentication.isAuthenticated()
         && authentication.getAuthorities().stream()
             .anyMatch(
-                authority ->
-                    "ROLE_ADMIN".equals(authority.getAuthority())
-                        || "ADMIN".equals(authority.getAuthority()));
+                authority -> WebGoatUser.ROLE_ADMIN.equals(authority.getAuthority()));
   }
 }

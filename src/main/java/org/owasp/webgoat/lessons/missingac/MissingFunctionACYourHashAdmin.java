@@ -11,6 +11,7 @@ import static org.owasp.webgoat.lessons.missingac.MissingFunctionAC.PASSWORD_SAL
 import org.owasp.webgoat.container.assignments.AssignmentEndpoint;
 import org.owasp.webgoat.container.assignments.AssignmentHints;
 import org.owasp.webgoat.container.assignments.AttackResult;
+import org.owasp.webgoat.container.users.WebGoatUser;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -60,8 +61,6 @@ public class MissingFunctionACYourHashAdmin implements AssignmentEndpoint {
         && authentication.isAuthenticated()
         && authentication.getAuthorities().stream()
             .anyMatch(
-                authority ->
-                    "ROLE_ADMIN".equals(authority.getAuthority())
-                        || "ADMIN".equals(authority.getAuthority()));
+                authority -> WebGoatUser.ROLE_ADMIN.equals(authority.getAuthority()));
   }
 }
