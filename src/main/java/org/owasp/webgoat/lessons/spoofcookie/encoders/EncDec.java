@@ -4,22 +4,21 @@
  */
 package org.owasp.webgoat.lessons.spoofcookie.encoders;
 
-import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.time.Instant;
 import java.util.Base64;
-import org.apache.commons.lang3.RandomStringUtils;
-import org.springframework.security.crypto.codec.Hex;
+import java.util.Locale;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
-/***
- *
- * @author Angel Olle Blazquez
- *
- */
-
+/** Issues opaque, short-lived cookie values that are looked up server-side. */
 public class EncDec {
 
-  // PoC: weak encoding method
-
-  private static final String SALT = RandomStringUtils.randomAlphabetic(10);
+  private static final int TOKEN_BYTES = 32;
+  private static final int MAX_SESSIONS = 10_000;
+  private static final long SESSION_LIFETIME_SECONDS = 30 * 60;
+  private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+  private static final ConcurrentMap<String, Session> SESSIONS = new ConcurrentHashMap<>();
 
   private EncDec() {}
 
@@ -28,43 +27,50 @@ public class EncDec {
       return null;
     }
 
-    String encoded = value.toLowerCase() + SALT;
-    encoded = revert(encoded);
-    encoded = hexEncode(encoded);
-    return base64Encode(encoded);
+    cleanupExpiredSessions();
+    byte[] tokenBytes = new byte[TOKEN_BYTES];
+    SECURE_RANDOM.nextBytes(tokenBytes);
+    String token = Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
+    SESSIONS.put(
+        token,
+        new Session(value.toLowerCase(Locale.ROOT), Instant.now().plusSeconds(SESSION_LIFETIME_SECONDS)));
+
+    while (SESSIONS.size() > MAX_SESSIONS) {
+      String oldestToken = SESSIONS.keySet().stream().findFirst().orElse(null);
+      if (oldestToken == null) {
+        break;
+      }
+      SESSIONS.remove(oldestToken);
+    }
+    return token;
   }
 
   public static String decode(final String encodedValue) throws IllegalArgumentException {
     if (encodedValue == null) {
       return null;
     }
+    if (encodedValue.length() > 64 || !encodedValue.matches("[A-Za-z0-9_-]{40,44}")) {
+      throw new IllegalArgumentException("Invalid or expired cookie");
+    }
 
-    String decoded = base64Decode(encodedValue);
-    decoded = hexDecode(decoded);
-    decoded = revert(decoded);
-    return decoded.substring(0, decoded.length() - SALT.length());
+    Session session = SESSIONS.get(encodedValue);
+    if (session == null || !session.expiresAt().isAfter(Instant.now())) {
+      SESSIONS.remove(encodedValue);
+      throw new IllegalArgumentException("Invalid or expired cookie");
+    }
+    return session.username();
   }
 
-  private static String revert(final String value) {
-    return new StringBuilder(value).reverse().toString();
+  public static void invalidate(final String token) {
+    if (token != null) {
+      SESSIONS.remove(token);
+    }
   }
 
-  private static String hexEncode(final String value) {
-    char[] encoded = Hex.encode(value.getBytes(StandardCharsets.UTF_8));
-    return new String(encoded);
+  private static void cleanupExpiredSessions() {
+    Instant now = Instant.now();
+    SESSIONS.entrySet().removeIf(entry -> !entry.getValue().expiresAt().isAfter(now));
   }
 
-  private static String hexDecode(final String value) {
-    byte[] decoded = Hex.decode(value);
-    return new String(decoded);
-  }
-
-  private static String base64Encode(final String value) {
-    return Base64.getEncoder().encodeToString(value.getBytes());
-  }
-
-  private static String base64Decode(final String value) {
-    byte[] decoded = Base64.getDecoder().decode(value.getBytes());
-    return new String(decoded);
-  }
+  private record Session(String username, Instant expiresAt) {}
 }

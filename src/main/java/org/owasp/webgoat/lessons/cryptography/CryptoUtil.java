@@ -57,6 +57,12 @@ public class CryptoUtil {
     return encodedString;
   }
 
+  public static String getPublicKeyInPEM(KeyPair keyPair) {
+    String encoded =
+        Base64.getMimeEncoder(64, new byte[] {'\n'}).encodeToString(keyPair.getPublic().getEncoded());
+    return "-----BEGIN PUBLIC KEY-----\n" + encoded + "\n-----END PUBLIC KEY-----\n";
+  }
+
   public static String signMessage(String message, PrivateKey privateKey) {
 
     log.debug("start signMessage");

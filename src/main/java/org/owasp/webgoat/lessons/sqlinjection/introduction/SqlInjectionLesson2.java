@@ -4,14 +4,11 @@
  */
 package org.owasp.webgoat.lessons.sqlinjection.introduction;
 
-import static java.sql.ResultSet.CONCUR_READ_ONLY;
-import static java.sql.ResultSet.TYPE_SCROLL_INSENSITIVE;
 import static org.owasp.webgoat.container.assignments.AttackResultBuilder.failed;
 import static org.owasp.webgoat.container.assignments.AttackResultBuilder.success;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import org.owasp.webgoat.container.LessonDataSource;
 import org.owasp.webgoat.container.assignments.AssignmentEndpoint;
 import org.owasp.webgoat.container.assignments.AssignmentHints;
@@ -39,27 +36,36 @@ public class SqlInjectionLesson2 implements AssignmentEndpoint {
 
   @PostMapping("/SqlInjection/attack2")
   @ResponseBody
-  public AttackResult completed(@RequestParam String query) {
-    return injectableQuery(query);
+  public AttackResult completed(@RequestParam String lastName) {
+    return lookupDepartment(lastName);
   }
 
-  protected AttackResult injectableQuery(String query) {
-    try (var connection = dataSource.getConnection()) {
-      Statement statement = connection.createStatement(TYPE_SCROLL_INSENSITIVE, CONCUR_READ_ONLY);
-      ResultSet results = statement.executeQuery(query);
-      StringBuilder output = new StringBuilder();
+  protected AttackResult lookupDepartment(String lastName) {
+    if (lastName == null || lastName.isBlank() || lastName.length() > 20) {
+      return failed(this).feedback("sql-injection.2.failed").build();
+    }
 
-      results.first();
-
-      if (results.getString("department").equals("Marketing")) {
-        output.append("<span class='feedback-positive'>" + query + "</span>");
-        output.append(SqlInjectionLesson8.generateTable(results));
-        return success(this).feedback("sql-injection.2.success").output(output.toString()).build();
-      } else {
-        return failed(this).feedback("sql-injection.2.failed").output(output.toString()).build();
+    try (var connection = dataSource.getConnection();
+        var statement =
+            connection.prepareStatement(
+                "SELECT department FROM employees WHERE first_name = 'Bob' AND last_name = ?")) {
+      statement.setString(1, lastName);
+      try (ResultSet results = statement.executeQuery()) {
+        if (results.next()) {
+          String department = results.getString("department");
+          String output = "Department: " + department;
+          if ("Franco".equalsIgnoreCase(lastName)) {
+            return success(this)
+                .feedback("sql-injection.2.success")
+                .output(output)
+                .build();
+          }
+          return failed(this).feedback("sql-injection.2.failed").output(output).build();
+        }
+        return failed(this).feedback("sql-injection.2.failed").build();
       }
-    } catch (SQLException sqle) {
-      return failed(this).feedback("sql-injection.2.failed").output(sqle.getMessage()).build();
+    } catch (SQLException e) {
+      return failed(this).feedback("sql-injection.2.failed").build();
     }
   }
 }

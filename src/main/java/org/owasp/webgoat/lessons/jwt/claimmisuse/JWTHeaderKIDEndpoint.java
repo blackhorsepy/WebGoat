@@ -14,6 +14,7 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SigningKeyResolverAdapter;
 import io.jsonwebtoken.impl.TextCodec;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import org.apache.commons.lang3.StringUtils;
@@ -67,15 +68,20 @@ public class JWTHeaderKIDEndpoint implements AssignmentEndpoint {
                     new SigningKeyResolverAdapter() {
                       @Override
                       public byte[] resolveSigningKeyBytes(JwsHeader header, Claims claims) {
-                        final String kid = (String) header.get("kid");
+                        final String kid = header.getKeyId();
+                        if (kid == null || !kid.matches("[A-Za-z0-9_-]{1,64}")) {
+                          errorMessage[0] = "Invalid key identifier";
+                          return null;
+                        }
                         try (var connection = dataSource.getConnection()) {
-                          ResultSet rs =
-                              connection
-                                  .createStatement()
-                                  .executeQuery(
-                                      "SELECT key FROM jwt_keys WHERE id = '" + kid + "'");
-                          while (rs.next()) {
-                            return TextCodec.BASE64.decode(rs.getString(1));
+                          try (PreparedStatement statement =
+                              connection.prepareStatement("SELECT key FROM jwt_keys WHERE id = ?")) {
+                            statement.setString(1, kid);
+                            try (ResultSet rs = statement.executeQuery()) {
+                              if (rs.next()) {
+                                return TextCodec.BASE64.decode(rs.getString(1));
+                              }
+                            }
                           }
                         } catch (SQLException e) {
                           errorMessage[0] = e.getMessage();
@@ -85,7 +91,7 @@ public class JWTHeaderKIDEndpoint implements AssignmentEndpoint {
                     })
                 .parseClaimsJws(token);
         if (errorMessage[0] != null) {
-          return failed(this).output(errorMessage[0]).build();
+          return failed(this).feedback("jwt-invalid-token").build();
         }
         Claims claims = (Claims) jwt.getBody();
         String username = (String) claims.get("username");
@@ -98,7 +104,7 @@ public class JWTHeaderKIDEndpoint implements AssignmentEndpoint {
           return failed(this).feedback("jwt-final-not-tom").build();
         }
       } catch (JwtException e) {
-        return failed(this).feedback("jwt-invalid-token").output(e.toString()).build();
+        return failed(this).feedback("jwt-invalid-token").build();
       }
     }
   }

@@ -8,31 +8,29 @@ import static org.owasp.webgoat.container.assignments.AttackResultBuilder.failed
 import static org.owasp.webgoat.container.assignments.AttackResultBuilder.success;
 import static org.springframework.util.StringUtils.hasText;
 
-import com.google.common.collect.Maps;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.owasp.webgoat.container.CurrentUsername;
 import org.owasp.webgoat.container.assignments.AssignmentEndpoint;
 import org.owasp.webgoat.container.assignments.AssignmentHints;
 import org.owasp.webgoat.container.assignments.AttackResult;
 import org.owasp.webgoat.lessons.passwordreset.resetlink.PasswordChangeForm;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.ModelAndView;
 
-/**
- * @author nbaars
- * @since 8/20/17.
- */
 @RestController
 @AssignmentHints({
   "password-reset-hint1",
@@ -45,52 +43,55 @@ import org.springframework.web.servlet.ModelAndView;
 public class ResetLinkAssignment implements AssignmentEndpoint {
 
   private static final String VIEW_FORMATTER = "lessons/passwordreset/templates/%s.html";
-  static final String PASSWORD_TOM_9 =
-      "somethingVeryRandomWhichNoOneWillEverTypeInAsPasswordForTom";
+  private static final Duration TOKEN_LIFETIME = Duration.ofMinutes(15);
   static final String TOM_EMAIL = "tom@webgoat-cloud.org";
-  static Map<String, String> userToTomResetLink = new HashMap<>();
-  static Map<String, String> usersToTomPassword = Maps.newHashMap();
-  static List<String> resetLinks = new ArrayList<>();
-
+  static final String GENERIC_LOGIN_FAILURE = "login_failed";
   static final String TEMPLATE =
       """
-      Hi, you requested a password reset link, please use this <a target='_blank'
-       href='http://%s/WebGoat/PasswordReset/reset/reset-password/%s'>link</a> to reset your
-       password.
+      Hi, you requested a password reset link. Use this <a target='_blank' href='%s/PasswordReset/reset/reset-password/%s'>link</a> to reset your password.
 
       If you did not request this password change you can ignore this message.
-      If you have any comments or questions, please do not hesitate to reach us at
-       support@webgoat-cloud.org
-
       Kind regards,
       Team WebGoat
       """;
 
+  static final List<String> resetLinks = new CopyOnWriteArrayList<>();
+  private static final Map<String, ResetToken> RESET_TOKENS = new ConcurrentHashMap<>();
+  private static final Map<String, String> PASSWORD_HASHES = new ConcurrentHashMap<>();
+  private static final PasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder();
+
   @PostMapping("/PasswordReset/reset/login")
   @ResponseBody
   public AttackResult login(
-      @RequestParam String password, @RequestParam String email, @CurrentUsername String username) {
-    if (TOM_EMAIL.equals(email)) {
-      String passwordTom = usersToTomPassword.getOrDefault(username, PASSWORD_TOM_9);
-      if (passwordTom.equals(PASSWORD_TOM_9)) {
-        return failed(this).feedback("login_failed").build();
-      } else if (passwordTom.equals(password)) {
-        return success(this).build();
-      }
+      @org.springframework.web.bind.annotation.RequestParam String password,
+      @org.springframework.web.bind.annotation.RequestParam String email,
+      @CurrentUsername String username) {
+    String passwordHash = hasText(username) ? PASSWORD_HASHES.get(username) : null;
+    String expectedEmail = username == null ? "" : username + "@webgoat.org";
+    if (hasText(username)
+        && email != null
+        && email.equalsIgnoreCase(expectedEmail)
+        && passwordHash != null
+        && password != null
+        && PASSWORD_ENCODER.matches(password, passwordHash)) {
+      return success(this).build();
     }
-    return failed(this).feedback("login_failed.tom").build();
+    return failed(this).feedback(GENERIC_LOGIN_FAILURE).build();
   }
 
   @GetMapping("/PasswordReset/reset/reset-password/{link}")
-  public ModelAndView resetPassword(@PathVariable(value = "link") String link, Model model) {
+  public ModelAndView resetPassword(
+      @PathVariable("link") String link,
+      @CurrentUsername String username,
+      Model model) {
     ModelAndView modelAndView = new ModelAndView();
-    if (ResetLinkAssignment.resetLinks.contains(link)) {
+    ResetToken token = validTokenFor(link, username);
+    if (token != null) {
       PasswordChangeForm form = new PasswordChangeForm();
       form.setResetLink(link);
       model.addAttribute("form", form);
       modelAndView.addObject("form", form);
-      modelAndView.setViewName(
-          VIEW_FORMATTER.formatted("password_reset")); // Display html page for changing password
+      modelAndView.setViewName(VIEW_FORMATTER.formatted("password_reset"));
     } else {
       modelAndView.setViewName(VIEW_FORMATTER.formatted("password_link_not_found"));
     }
@@ -103,26 +104,56 @@ public class ResetLinkAssignment implements AssignmentEndpoint {
       BindingResult bindingResult,
       @CurrentUsername String username) {
     ModelAndView modelAndView = new ModelAndView();
-    if (!hasText(form.getPassword())) {
+    if (!hasText(form.getPassword())
+        || form.getPassword().length() < 12
+        || form.getPassword().length() > 128) {
       bindingResult.rejectValue("password", "not.empty");
     }
     if (bindingResult.hasErrors()) {
       modelAndView.setViewName(VIEW_FORMATTER.formatted("password_reset"));
       return modelAndView;
     }
-    if (!resetLinks.contains(form.getResetLink())) {
+
+    ResetToken token = validTokenFor(form.getResetLink(), username);
+    if (token == null || !RESET_TOKENS.remove(form.getResetLink(), token)) {
       modelAndView.setViewName(VIEW_FORMATTER.formatted("password_link_not_found"));
       return modelAndView;
     }
-    if (checkIfLinkIsFromTom(form.getResetLink(), username)) {
-      usersToTomPassword.put(username, form.getPassword());
-    }
+
+    resetLinks.remove(form.getResetLink());
+    PASSWORD_HASHES.put(username, PASSWORD_ENCODER.encode(form.getPassword()));
     modelAndView.setViewName(VIEW_FORMATTER.formatted("success"));
     return modelAndView;
   }
 
-  private boolean checkIfLinkIsFromTom(String resetLinkFromForm, String username) {
-    String resetLink = userToTomResetLink.getOrDefault(username, "unknown");
-    return resetLink.equals(resetLinkFromForm);
+  static void registerResetLink(String link, String username) {
+    Instant now = Instant.now();
+    RESET_TOKENS.entrySet().removeIf(entry -> !entry.getValue().expiresAt().isAfter(now));
+    resetLinks.removeIf(linkValue -> !RESET_TOKENS.containsKey(linkValue));
+    Instant expiresAt = Instant.now().plus(TOKEN_LIFETIME);
+    RESET_TOKENS.put(link, new ResetToken(username, expiresAt));
+    resetLinks.add(link);
   }
+
+  static void removeResetLink(String link) {
+    RESET_TOKENS.remove(link);
+    resetLinks.remove(link);
+  }
+
+  private ResetToken validTokenFor(String link, String username) {
+    if (!hasText(link) || !hasText(username) || !link.matches("[A-Za-z0-9_-]{40,64}")) {
+      return null;
+    }
+    ResetToken token = RESET_TOKENS.get(link);
+    if (token == null || !token.expiresAt().isAfter(Instant.now()) || !token.username().equals(username)) {
+      if (token != null && !token.expiresAt().isAfter(Instant.now())) {
+        RESET_TOKENS.remove(link, token);
+        resetLinks.remove(link);
+      }
+      return null;
+    }
+    return token;
+  }
+
+  private record ResetToken(String username, Instant expiresAt) {}
 }

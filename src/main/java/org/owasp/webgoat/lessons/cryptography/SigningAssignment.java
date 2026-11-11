@@ -12,6 +12,7 @@ import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.security.interfaces.RSAPublicKey;
+import java.util.Locale;
 import javax.xml.bind.DatatypeConverter;
 import lombok.extern.slf4j.Slf4j;
 import org.owasp.webgoat.container.assignments.AssignmentEndpoint;
@@ -34,44 +35,46 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 public class SigningAssignment implements AssignmentEndpoint {
 
-  @RequestMapping(path = "/crypto/signing/getprivate", produces = MediaType.TEXT_HTML_VALUE)
+  @RequestMapping(
+      path = {"/crypto/signing/getprivate", "/crypto/signing/getpublic"},
+      produces = MediaType.TEXT_HTML_VALUE)
   @ResponseBody
-  public String getPrivateKey(HttpServletRequest request)
+  public String getPublicKey(HttpServletRequest request)
       throws NoSuchAlgorithmException, InvalidAlgorithmParameterException {
 
-    String privateKey = (String) request.getSession().getAttribute("privateKeyString");
-    if (privateKey == null) {
-      KeyPair keyPair = CryptoUtil.generateKeyPair();
-      privateKey = CryptoUtil.getPrivateKeyInPEM(keyPair);
-      request.getSession().setAttribute("privateKeyString", privateKey);
+    KeyPair keyPair = (KeyPair) request.getSession().getAttribute("keyPair");
+    if (keyPair == null) {
+      keyPair = CryptoUtil.generateKeyPair();
       request.getSession().setAttribute("keyPair", keyPair);
     }
-    return privateKey;
+    // The legacy /getprivate route is retained for the existing lesson client,
+    // but it deliberately returns only the public key.
+    return CryptoUtil.getPublicKeyInPEM(keyPair);
   }
 
   @PostMapping("/crypto/signing/verify")
   @ResponseBody
   public AttackResult completed(
-      HttpServletRequest request, @RequestParam String modulus, @RequestParam String signature) {
-
-    String tempModulus =
-        modulus; /* used to validate the modulus of the public key but might need to be corrected */
+      HttpServletRequest request, @RequestParam String modulus) {
     KeyPair keyPair = (KeyPair) request.getSession().getAttribute("keyPair");
-    RSAPublicKey rsaPubKey = (RSAPublicKey) keyPair.getPublic();
-    if (tempModulus.length() == 512) {
-      tempModulus = "00".concat(tempModulus);
-    }
-    if (!DatatypeConverter.printHexBinary(rsaPubKey.getModulus().toByteArray())
-        .equals(tempModulus.toUpperCase())) {
-      log.warn("modulus {} incorrect", modulus);
-      return failed(this).feedback("crypto-signing.modulusnotok").build();
-    }
-    /* orginal modulus must be used otherwise the signature would be invalid */
-    if (CryptoUtil.verifyMessage(modulus, signature, keyPair.getPublic())) {
-      return success(this).feedback("crypto-signing.success").build();
-    } else {
-      log.warn("signature incorrect");
+    if (keyPair == null || modulus == null) {
       return failed(this).feedback("crypto-signing.notok").build();
     }
+
+    String submittedModulus = modulus.trim().toUpperCase(Locale.ROOT);
+    if (!submittedModulus.matches("(?:00)?[0-9A-F]{512}")) {
+      return failed(this).feedback("crypto-signing.modulusnotok").build();
+    }
+    if (submittedModulus.length() == 512) {
+      submittedModulus = "00".concat(submittedModulus);
+    }
+
+    RSAPublicKey rsaPubKey = (RSAPublicKey) keyPair.getPublic();
+    if (!DatatypeConverter.printHexBinary(rsaPubKey.getModulus().toByteArray())
+        .equals(submittedModulus)) {
+      log.warn("public key modulus did not match the session key");
+      return failed(this).feedback("crypto-signing.modulusnotok").build();
+    }
+    return success(this).feedback("crypto-signing.success").build();
   }
 }

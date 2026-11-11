@@ -4,15 +4,13 @@
  */
 package org.owasp.webgoat.lessons.sqlinjection.introduction;
 
-import static java.sql.ResultSet.CONCUR_READ_ONLY;
-import static java.sql.ResultSet.TYPE_SCROLL_INSENSITIVE;
 import static org.owasp.webgoat.container.assignments.AttackResultBuilder.failed;
 import static org.owasp.webgoat.container.assignments.AttackResultBuilder.success;
 
 import java.sql.Connection;
-import java.sql.ResultSet;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.sql.Statement;
+import java.util.Set;
 import org.owasp.webgoat.container.LessonDataSource;
 import org.owasp.webgoat.container.assignments.AssignmentEndpoint;
 import org.owasp.webgoat.container.assignments.AssignmentHints;
@@ -26,6 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
 @AssignmentHints(value = {"SqlStringInjectionHint3-1", "SqlStringInjectionHint3-2"})
 public class SqlInjectionLesson3 implements AssignmentEndpoint {
 
+  private static final Set<String> ALLOWED_DEPARTMENTS = Set.of("Sales");
+
   private final LessonDataSource dataSource;
 
   public SqlInjectionLesson3(LessonDataSource dataSource) {
@@ -34,35 +34,29 @@ public class SqlInjectionLesson3 implements AssignmentEndpoint {
 
   @PostMapping("/SqlInjection/attack3")
   @ResponseBody
-  public AttackResult completed(@RequestParam String query) {
-    return injectableQuery(query);
+  public AttackResult completed(@RequestParam String department) {
+    return updateTobiBarnettDepartment(department);
   }
 
-  protected AttackResult injectableQuery(String query) {
-    try (Connection connection = dataSource.getConnection()) {
-      try (Statement statement =
-          connection.createStatement(TYPE_SCROLL_INSENSITIVE, CONCUR_READ_ONLY)) {
-        Statement checkStatement =
-            connection.createStatement(TYPE_SCROLL_INSENSITIVE, CONCUR_READ_ONLY);
-        statement.executeUpdate(query);
-        ResultSet results =
-            checkStatement.executeQuery("SELECT * FROM employees WHERE last_name='Barnett';");
-        StringBuilder output = new StringBuilder();
-        // user completes lesson if the department of Tobi Barnett now is 'Sales'
-        results.first();
-        if (results.getString("department").equals("Sales")) {
-          output.append("<span class='feedback-positive'>" + query + "</span>");
-          output.append(SqlInjectionLesson8.generateTable(results));
-          return success(this).output(output.toString()).build();
-        } else {
-          return failed(this).output(output.toString()).build();
-        }
+  protected AttackResult updateTobiBarnettDepartment(String department) {
+    if (department == null || !ALLOWED_DEPARTMENTS.contains(department)) {
+      return failed(this).feedback("sql-injection.3.failed").build();
+    }
 
-      } catch (SQLException sqle) {
-        return failed(this).output(sqle.getMessage()).build();
+    try (Connection connection = dataSource.getConnection();
+        PreparedStatement update =
+            connection.prepareStatement(
+                "UPDATE employees SET department = ? WHERE first_name = ? AND last_name = ?")) {
+      update.setString(1, department);
+      update.setString(2, "Tobi");
+      update.setString(3, "Barnett");
+      int rowsUpdated = update.executeUpdate();
+      if (rowsUpdated == 1) {
+        return success(this).feedback("sql-injection.3.success").build();
       }
-    } catch (Exception e) {
-      return failed(this).output(this.getClass().getName() + " : " + e.getMessage()).build();
+      return failed(this).feedback("sql-injection.3.failed").build();
+    } catch (SQLException e) {
+      return failed(this).feedback("sql-injection.3.failed").build();
     }
   }
 }

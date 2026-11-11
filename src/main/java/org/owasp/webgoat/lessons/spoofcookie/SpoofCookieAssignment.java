@@ -11,6 +11,7 @@ import static org.owasp.webgoat.container.assignments.AttackResultBuilder.succes
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Map;
+import java.util.Locale;
 import org.apache.commons.lang3.StringUtils;
 import org.owasp.webgoat.container.assignments.AssignmentEndpoint;
 import org.owasp.webgoat.container.assignments.AssignmentHints;
@@ -37,7 +38,7 @@ public class SpoofCookieAssignment implements AssignmentEndpoint {
 
   private static final String COOKIE_NAME = "spoof_auth";
   private static final String COOKIE_INFO =
-      "Cookie details for user %s:<br />" + COOKIE_NAME + "=%s";
+      "Cookie issued for user %s. The authentication token is kept out of the page.";
   private static final String ATTACK_USERNAME = "tom";
 
   private static final Map<String, String> users =
@@ -60,15 +61,21 @@ public class SpoofCookieAssignment implements AssignmentEndpoint {
   }
 
   @GetMapping(path = "/SpoofCookie/cleanup")
-  public void cleanup(HttpServletResponse response) {
+  public void cleanup(
+      @CookieValue(value = COOKIE_NAME, required = false) String cookieValue,
+      HttpServletResponse response) {
+    EncDec.invalidate(cookieValue);
     Cookie cookie = new Cookie(COOKIE_NAME, "");
+    cookie.setPath("/WebGoat");
+    cookie.setSecure(true);
+    cookie.setHttpOnly(true);
     cookie.setMaxAge(0);
     response.addCookie(cookie);
   }
 
   private AttackResult credentialsLoginFlow(
       String username, String password, HttpServletResponse response) {
-    String lowerCasedUsername = username.toLowerCase();
+    String lowerCasedUsername = username.toLowerCase(Locale.ROOT);
     if (ATTACK_USERNAME.equals(lowerCasedUsername)
         && users.get(lowerCasedUsername).equals(password)) {
       return informationMessage(this).feedback("spoofcookie.cheating").build();
@@ -80,10 +87,13 @@ public class SpoofCookieAssignment implements AssignmentEndpoint {
       Cookie newCookie = new Cookie(COOKIE_NAME, newCookieValue);
       newCookie.setPath("/WebGoat");
       newCookie.setSecure(true);
+      newCookie.setHttpOnly(true);
+      newCookie.setMaxAge(30 * 60);
       response.addCookie(newCookie);
       return informationMessage(this)
           .feedback("spoofcookie.login")
-          .output(String.format(COOKIE_INFO, lowerCasedUsername, newCookie.getValue()))
+          .output(String.format(COOKIE_INFO, lowerCasedUsername))
+          .output("<span class=\"spoof-auth-active\" hidden></span>")
           .build();
     }
 
@@ -95,8 +105,7 @@ public class SpoofCookieAssignment implements AssignmentEndpoint {
     try {
       cookieUsername = EncDec.decode(cookieValue).toLowerCase();
     } catch (Exception e) {
-      // for providing some instructive guidance, we won't return 4xx error here
-      return failed(this).output(e.getMessage()).build();
+      return failed(this).feedback("spoofcookie.wrong-cookie").build();
     }
     if (users.containsKey(cookieUsername)) {
       if (cookieUsername.equals(ATTACK_USERNAME)) {
@@ -104,7 +113,7 @@ public class SpoofCookieAssignment implements AssignmentEndpoint {
       }
       return failed(this)
           .feedback("spoofcookie.cookie-login")
-          .output(String.format(COOKIE_INFO, cookieUsername, cookieValue))
+          .output(String.format(COOKIE_INFO, cookieUsername))
           .build();
     }
 

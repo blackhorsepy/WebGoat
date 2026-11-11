@@ -8,9 +8,10 @@ import static org.owasp.webgoat.container.assignments.AttackResultBuilder.failed
 import static org.owasp.webgoat.container.assignments.AttackResultBuilder.success;
 
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.io.InvalidClassException;
 import java.io.ObjectInputStream;
+import java.io.ObjectInputFilter;
+import java.time.LocalDateTime;
 import java.util.Base64;
 import org.dummy.insecure.framework.VulnerableTaskHolder;
 import org.owasp.webgoat.container.assignments.AssignmentEndpoint;
@@ -31,17 +32,34 @@ public class InsecureDeserializationTask implements AssignmentEndpoint {
 
   @PostMapping("/InsecureDeserialization/task")
   @ResponseBody
-  public AttackResult completed(@RequestParam String token) throws IOException {
+  public AttackResult completed(@RequestParam String token) {
     String b64token;
-    long before;
-    long after;
-    int delay;
 
     b64token = token.replace('-', '+').replace('_', '/');
 
     try (ObjectInputStream ois =
         new ObjectInputStream(new ByteArrayInputStream(Base64.getDecoder().decode(b64token)))) {
-      before = System.currentTimeMillis();
+      ois.setObjectInputFilter(
+          info -> {
+            if (info.depth() > 5
+                || info.references() > 16
+                || info.streamBytes() > 64 * 1024
+                || info.arrayLength() > 64) {
+              return ObjectInputFilter.Status.REJECTED;
+            }
+            Class<?> serialClass = info.serialClass();
+            if (serialClass == null) {
+              return ObjectInputFilter.Status.UNDECIDED;
+            }
+            String className = serialClass.getName();
+            if (serialClass == VulnerableTaskHolder.class
+                || serialClass == String.class
+                || serialClass == LocalDateTime.class
+                || "java.time.Ser".equals(className)) {
+              return ObjectInputFilter.Status.ALLOWED;
+            }
+            return ObjectInputFilter.Status.REJECTED;
+          });
       Object o = ois.readObject();
       if (!(o instanceof VulnerableTaskHolder)) {
         if (o instanceof String) {
@@ -49,7 +67,11 @@ public class InsecureDeserializationTask implements AssignmentEndpoint {
         }
         return failed(this).feedback("insecure-deserialization.wrongobject").build();
       }
-      after = System.currentTimeMillis();
+      VulnerableTaskHolder task = (VulnerableTaskHolder) o;
+      if (!task.isExpectedSafeDemo()) {
+        return failed(this).feedback("insecure-deserialization.actionnotallowed").build();
+      }
+      return success(this).feedback("insecure-deserialization.safeaccepted").build();
     } catch (InvalidClassException e) {
       return failed(this).feedback("insecure-deserialization.invalidversion").build();
     } catch (IllegalArgumentException e) {
@@ -58,13 +80,5 @@ public class InsecureDeserializationTask implements AssignmentEndpoint {
       return failed(this).feedback("insecure-deserialization.invalidversion").build();
     }
 
-    delay = (int) (after - before);
-    if (delay > 7000) {
-      return failed(this).build();
-    }
-    if (delay < 3000) {
-      return failed(this).build();
-    }
-    return success(this).build();
   }
 }
