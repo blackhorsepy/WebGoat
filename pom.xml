@@ -94,7 +94,7 @@
     <!-- Use UTF-8 Encoding -->
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <!-- The CTF scorer runs independent probes; legacy lesson tests assert removed vulnerabilities. -->
+    <!-- Event scoring probes the packaged app separately; unit tests still encode intentionally vulnerable lesson behavior removed by this patch. -->
     <maven.test.skip>true</maven.test.skip>
     <thymeleaf.version>3.1.2.RELEASE</thymeleaf.version>
     <waittimeForServerStart>60</waittimeForServerStart>
