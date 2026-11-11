@@ -32,6 +32,8 @@ public class JWTSecretKeyEndpoint implements AssignmentEndpoint {
 
   private static final byte[] JWT_SECRET = newSecret();
   private static final String WEBGOAT_USER = "WebGoat";
+  private static final String ISSUER = "WebGoat Token Builder";
+  private static final String AUDIENCE = "webgoat.org";
   private static final List<String> expectedClaims =
       List.of("iss", "iat", "exp", "aud", "sub", "username", "Email", "Role");
 
@@ -45,8 +47,8 @@ public class JWTSecretKeyEndpoint implements AssignmentEndpoint {
   @ResponseBody
   public String getSecretToken() {
     return Jwts.builder()
-        .setIssuer("WebGoat Token Builder")
-        .setAudience("webgoat.org")
+        .setIssuer(ISSUER)
+        .setAudience(AUDIENCE)
         .setIssuedAt(Calendar.getInstance().getTime())
         .setExpiration(Date.from(Instant.now().plusSeconds(60)))
         .setSubject("tom@webgoat.org")
@@ -63,12 +65,18 @@ public class JWTSecretKeyEndpoint implements AssignmentEndpoint {
     try {
       Jwt jwt = Jwts.parser().setSigningKey(JWT_SECRET).parseClaimsJws(token);
       Claims claims = (Claims) jwt.getBody();
-      if (!claims.keySet().containsAll(expectedClaims)) {
+      Date now = new Date();
+      Date issuedAt = claims.getIssuedAt();
+      if (!claims.keySet().containsAll(expectedClaims)
+          || !ISSUER.equals(claims.getIssuer())
+          || !AUDIENCE.equals(claims.getAudience())
+          || issuedAt == null
+          || issuedAt.after(new Date(now.getTime() + 60_000))) {
         return failed(this).feedback("jwt-secret-claims-missing").build();
       } else {
-        String user = (String) claims.get("username");
+        String user = claims.get("username", String.class);
 
-        if (WEBGOAT_USER.equalsIgnoreCase(user)) {
+        if (WEBGOAT_USER.equals(user)) {
           return success(this).build();
         } else {
           return failed(this).feedback("jwt-secret-incorrect-user").feedbackArgs(user).build();

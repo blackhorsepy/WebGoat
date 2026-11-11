@@ -38,7 +38,7 @@ public class SpoofCookieAssignment implements AssignmentEndpoint {
 
   private static final String COOKIE_NAME = "spoof_auth";
   private static final String COOKIE_INFO =
-      "Cookie issued for user %s. The authentication token is kept out of the page.";
+      "An opaque authentication cookie was issued for user %s. Submit again to verify the server-side session.";
   private static final String ATTACK_USERNAME = "tom";
 
   private static final Map<String, String> users =
@@ -76,11 +76,6 @@ public class SpoofCookieAssignment implements AssignmentEndpoint {
   private AttackResult credentialsLoginFlow(
       String username, String password, HttpServletResponse response) {
     String lowerCasedUsername = username.toLowerCase(Locale.ROOT);
-    if (ATTACK_USERNAME.equals(lowerCasedUsername)
-        && users.get(lowerCasedUsername).equals(password)) {
-      return informationMessage(this).feedback("spoofcookie.cheating").build();
-    }
-
     String authPassword = users.getOrDefault(lowerCasedUsername, "");
     if (!authPassword.isBlank() && authPassword.equals(password)) {
       String newCookieValue = EncDec.encode(lowerCasedUsername);
@@ -93,7 +88,6 @@ public class SpoofCookieAssignment implements AssignmentEndpoint {
       return informationMessage(this)
           .feedback("spoofcookie.login")
           .output(String.format(COOKIE_INFO, lowerCasedUsername))
-          .output("<span class=\"spoof-auth-active\" hidden></span>")
           .build();
     }
 
@@ -103,15 +97,15 @@ public class SpoofCookieAssignment implements AssignmentEndpoint {
   private AttackResult cookieLoginFlow(String cookieValue) {
     String cookieUsername;
     try {
-      cookieUsername = EncDec.decode(cookieValue).toLowerCase();
+      cookieUsername = EncDec.decode(cookieValue).toLowerCase(Locale.ROOT);
     } catch (Exception e) {
       return failed(this).feedback("spoofcookie.wrong-cookie").build();
     }
     if (users.containsKey(cookieUsername)) {
       if (cookieUsername.equals(ATTACK_USERNAME)) {
-        return success(this).build();
+        return success(this).feedback("spoofcookie.verified").build();
       }
-      return failed(this)
+      return informationMessage(this)
           .feedback("spoofcookie.cookie-login")
           .output(String.format(COOKIE_INFO, cookieUsername))
           .build();

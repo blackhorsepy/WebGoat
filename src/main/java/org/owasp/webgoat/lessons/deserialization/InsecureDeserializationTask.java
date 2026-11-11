@@ -30,9 +30,14 @@ import org.springframework.web.bind.annotation.RestController;
 })
 public class InsecureDeserializationTask implements AssignmentEndpoint {
 
+  private static final int MAX_TOKEN_LENGTH = 90_000;
+
   @PostMapping("/InsecureDeserialization/task")
   @ResponseBody
   public AttackResult completed(@RequestParam String token) {
+    if (token == null || token.length() > MAX_TOKEN_LENGTH) {
+      return failed(this).feedback("insecure-deserialization.invalidversion").build();
+    }
     String b64token;
 
     b64token = token.replace('-', '+').replace('_', '/');

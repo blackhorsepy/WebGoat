@@ -10,7 +10,6 @@ import static org.owasp.webgoat.container.assignments.AttackResultBuilder.succes
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.Set;
 import org.owasp.webgoat.container.LessonDataSource;
@@ -66,37 +65,4 @@ public class SqlInjectionLesson5a implements AssignmentEndpoint {
     return failed(this).feedback("sql-injection.5a.no.results").build();
   }
 
-  public static String writeTable(ResultSet results, ResultSetMetaData resultsMetaData)
-      throws SQLException {
-    int numColumns = resultsMetaData.getColumnCount();
-    results.beforeFirst();
-    StringBuilder t = new StringBuilder();
-    t.append("<p>");
-
-    if (results.next()) {
-      for (int i = 1; i < (numColumns + 1); i++) {
-        t.append(resultsMetaData.getColumnName(i));
-        t.append(", ");
-      }
-
-      t.append("<br />");
-      results.beforeFirst();
-
-      while (results.next()) {
-
-        for (int i = 1; i < (numColumns + 1); i++) {
-          t.append(results.getString(i));
-          t.append(", ");
-        }
-
-        t.append("<br />");
-      }
-
-    } else {
-      t.append("Query Successful; however no data was returned from this query.");
-    }
-
-    t.append("</p>");
-    return (t.toString());
-  }
 }

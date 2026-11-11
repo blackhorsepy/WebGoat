@@ -48,7 +48,7 @@ public class MissingFunctionACYourHashAdmin implements AssignmentEndpoint {
       return failed(this).build();
     }
     var displayUser = new DisplayUser(user, PASSWORD_SALT_ADMIN);
-    if (userHash.equals(displayUser.getUserHash())) {
+    if (DisplayUser.matchesHash(userHash, displayUser.getUserHash())) {
       return success(this).feedback("access-control.hash.success").build();
     } else {
       return failed(this).feedback("access-control.hash.close").build();

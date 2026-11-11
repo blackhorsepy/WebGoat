@@ -15,6 +15,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,6 +29,7 @@ import org.springframework.web.servlet.ModelAndView;
 @AllArgsConstructor
 @Slf4j
 public class MissingFunctionACUsers {
+  private static final PasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder();
 
   private final MissingAccessControlUserRepository userRepository;
 
@@ -96,7 +99,13 @@ public class MissingFunctionACUsers {
       if (newUser == null || newUser.getUsername() == null || newUser.getPassword() == null) {
         return ResponseEntity.badRequest().build();
       }
+      if (newUser.getUsername().isBlank()
+          || newUser.getPassword().length() < 12
+          || newUser.getPassword().length() > 128) {
+        return ResponseEntity.badRequest().build();
+      }
       newUser.setAdmin(false);
+      newUser.setPassword(PASSWORD_ENCODER.encode(newUser.getPassword()));
       userRepository.save(newUser);
       return ResponseEntity.status(HttpStatus.CREATED).build();
     } catch (Exception ex) {

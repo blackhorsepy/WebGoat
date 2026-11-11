@@ -71,6 +71,11 @@
               th:action="@{/SqlInjection/attack4}"
               autocomplete="off">
             <p th:text="#{sql-injection.4.notice}">Read-only simulation. No DDL statement will be executed and the database schema will not change.</p>
+            <label for="schema-preview" th:text="#{sql-injection.4.operation}">Schema example</label>
+            <select id="schema-preview" name="schema_action" required="required">
+                <option value="" selected="selected" disabled="disabled" th:text="#{sql-injection.4.operation.choose}">Choose an example</option>
+                <option value="preview-phone-column" th:text="#{sql-injection.4.operation.preview}">Preview adding a phone column</option>
+            </select>
             <button type="SUBMIT" th:text="#{sql-injection.4.submit}">Show schema simulation</button>
         </form>
         <div class="attack-feedback"></div>

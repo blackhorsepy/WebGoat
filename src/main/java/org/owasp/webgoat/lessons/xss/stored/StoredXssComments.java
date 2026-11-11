@@ -75,6 +75,9 @@ public class StoredXssComments implements AssignmentEndpoint {
   public AttackResult createNewComment(
       @RequestBody String commentStr, @CurrentUsername String username) {
     Comment comment = parseJson(commentStr);
+    if (comment == null || comment.getText() == null || comment.getText().length() > 2000) {
+      return failed(this).feedback("xss-stored-comment-invalid").build();
+    }
 
     List<Comment> comments = userComments.getOrDefault(username, new ArrayList<>());
     comment.setDateTime(LocalDateTime.now().format(fmt));
@@ -95,7 +98,7 @@ public class StoredXssComments implements AssignmentEndpoint {
     try {
       return mapper.readValue(comment, Comment.class);
     } catch (IOException e) {
-      return new Comment();
+      return null;
     }
   }
 }

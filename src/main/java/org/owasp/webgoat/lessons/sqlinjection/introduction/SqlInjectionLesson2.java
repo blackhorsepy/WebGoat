@@ -9,6 +9,7 @@ import static org.owasp.webgoat.container.assignments.AttackResultBuilder.succes
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Set;
 import org.owasp.webgoat.container.LessonDataSource;
 import org.owasp.webgoat.container.assignments.AssignmentEndpoint;
 import org.owasp.webgoat.container.assignments.AssignmentHints;
@@ -28,6 +29,8 @@ import org.springframework.web.bind.annotation.RestController;
     })
 public class SqlInjectionLesson2 implements AssignmentEndpoint {
 
+  private static final Set<String> ALLOWED_LAST_NAMES = Set.of("Franco");
+
   private final LessonDataSource dataSource;
 
   public SqlInjectionLesson2(LessonDataSource dataSource) {
@@ -41,7 +44,7 @@ public class SqlInjectionLesson2 implements AssignmentEndpoint {
   }
 
   protected AttackResult lookupDepartment(String lastName) {
-    if (lastName == null || lastName.isBlank() || lastName.length() > 20) {
+    if (lastName == null || !ALLOWED_LAST_NAMES.contains(lastName)) {
       return failed(this).feedback("sql-injection.2.failed").build();
     }
 

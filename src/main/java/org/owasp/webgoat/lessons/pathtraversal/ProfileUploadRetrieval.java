@@ -20,7 +20,6 @@ import java.nio.file.Path;
 import java.util.Base64;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.RandomUtils;
-import org.owasp.webgoat.container.CurrentUsername;
 import org.owasp.webgoat.container.assignments.AssignmentEndpoint;
 import org.owasp.webgoat.container.assignments.AssignmentHints;
 import org.owasp.webgoat.container.assignments.AttackResult;
@@ -28,7 +27,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.token.Sha512DigestUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -56,11 +54,26 @@ public class ProfileUploadRetrieval implements AssignmentEndpoint {
             .resolve("PathTraversal")
             .resolve("cats")
             .toFile();
-    this.catPicturesDirectory.mkdirs();
   }
 
   @PostConstruct
   public void initAssignment() {
+    Path imageDirectory = catPicturesDirectory.toPath().toAbsolutePath().normalize();
+    if (hasSymbolicLinkComponent(imageDirectory)) {
+      log.error("Refusing to initialize the picture gallery through a symbolic link");
+      return;
+    }
+    try {
+      Files.createDirectories(imageDirectory);
+    } catch (IOException e) {
+      log.error("Unable to create the picture gallery", e);
+      return;
+    }
+    if (hasSymbolicLinkComponent(imageDirectory)) {
+      log.error("Refusing to initialize the picture gallery through a symbolic link");
+      return;
+    }
+
     for (int i = 1; i <= 10; i++) {
       try (InputStream is =
           new ClassPathResource("lessons/pathtraversal/images/cats/" + i + ".jpg")
@@ -78,12 +91,11 @@ public class ProfileUploadRetrieval implements AssignmentEndpoint {
   @PostMapping("/PathTraversal/random")
   @ResponseBody
   public AttackResult execute(
-      @RequestParam(value = "secret", required = false) String secret,
-      @CurrentUsername String username) {
-    if (Sha512DigestUtils.shaHex(username).equalsIgnoreCase(secret)) {
-      return success(this).build();
+      @RequestParam(value = "id", required = false) String idParameter) {
+    if (validPictureId(idParameter) != null) {
+      return success(this).feedback("path-traversal-retrieval-success").build();
     }
-    return failed(this).build();
+    return failed(this).feedback("path-traversal-retrieval-invalid").build();
   }
 
   @GetMapping("/PathTraversal/random-picture")
@@ -91,12 +103,23 @@ public class ProfileUploadRetrieval implements AssignmentEndpoint {
   public ResponseEntity<?> getProfilePicture(HttpServletRequest request) {
     try {
       String idParameter = request.getParameter("id");
-      int id = idParameter == null ? RandomUtils.nextInt(1, 11) : Integer.parseInt(idParameter);
-      if (id < 1 || id > 10) {
+      Integer selectedId;
+      if (idParameter == null) {
+        selectedId = RandomUtils.nextInt(1, 11);
+      } else {
+        selectedId = validPictureId(idParameter);
+      }
+      if (selectedId == null) {
+        return ResponseEntity.badRequest().build();
+      }
+      int id = selectedId;
+
+      Path configuredImageDirectory = catPicturesDirectory.toPath().toAbsolutePath().normalize();
+      if (hasSymbolicLinkComponent(configuredImageDirectory)) {
         return ResponseEntity.notFound().build();
       }
 
-      Path imageRoot = catPicturesDirectory.toPath().toRealPath();
+      Path imageRoot = configuredImageDirectory.toRealPath();
       Path catPicture = imageRoot.resolve(id + ".jpg").normalize();
       if (!catPicture.startsWith(imageRoot)
           || Files.isSymbolicLink(catPicture)
@@ -113,10 +136,28 @@ public class ProfileUploadRetrieval implements AssignmentEndpoint {
       return ResponseEntity.notFound().build();
     } catch (IOException | URISyntaxException e) {
       log.error("Image not found", e);
-    } catch (NumberFormatException e) {
-      return ResponseEntity.badRequest().build();
     }
 
     return ResponseEntity.badRequest().build();
+  }
+
+  private Integer validPictureId(String idParameter) {
+    if (idParameter == null) {
+      return null;
+    }
+    try {
+      int id = Integer.parseInt(idParameter);
+      return id >= 1 && id <= 10 && Integer.toString(id).equals(idParameter) ? id : null;
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
+  private boolean hasSymbolicLinkComponent(Path path) {
+    Path normalized = path.toAbsolutePath().normalize();
+    Path parent = normalized.getParent();
+    // The configured WebGoat data directory is trusted. Reject links in the
+    // gallery directory and its lesson-owned parent, where uploads may exist.
+    return Files.isSymbolicLink(normalized) || (parent != null && Files.isSymbolicLink(parent));
   }
 }

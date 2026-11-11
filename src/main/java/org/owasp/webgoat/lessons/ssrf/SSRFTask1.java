@@ -26,26 +26,21 @@ public class SSRFTask1 implements AssignmentEndpoint {
   }
 
   protected AttackResult stealTheCheese(String url) {
-    try {
-      StringBuilder html = new StringBuilder();
-
-      if (url.matches("images/tom\\.png")) {
-        html.append(
-            "<img class=\"image\" alt=\"Tom\" src=\"images/tom.png\" width=\"25%\""
-                + " height=\"25%\">");
-        return failed(this).feedback("ssrf.tom").output(html.toString()).build();
-      } else if (url.matches("images/jerry\\.png")) {
-        html.append(
-            "<img class=\"image\" alt=\"Jerry\" src=\"images/jerry.png\" width=\"25%\""
-                + " height=\"25%\">");
-        return success(this).feedback("ssrf.success").output(html.toString()).build();
-      } else {
-        html.append("<img class=\"image\" alt=\"Silly Cat\" src=\"images/cat.jpg\">");
-        return failed(this).feedback("ssrf.failure").output(html.toString()).build();
-      }
-    } catch (Exception e) {
-      e.printStackTrace();
-      return failed(this).output(e.getMessage()).build();
+    // This assignment is a local simulation: never fetch a URL supplied by the
+    // browser. Keep the two lesson examples as fixed, allowlisted values.
+    if ("images/tom.png".equals(url)) {
+      String html =
+          "<img class=\"image\" alt=\"Tom\" src=\"images/tom.png\" width=\"25%\""
+              + " height=\"25%\">";
+      return failed(this).feedback("ssrf.tom").output(html).build();
     }
+    if ("images/jerry.png".equals(url)) {
+      String html =
+          "<img class=\"image\" alt=\"Jerry\" src=\"images/jerry.png\" width=\"25%\""
+              + " height=\"25%\">";
+      return success(this).feedback("ssrf.success").output(html).build();
+    }
+    String html = "<img class=\"image\" alt=\"Silly Cat\" src=\"images/cat.jpg\">";
+    return failed(this).feedback("ssrf.failure").output(html).build();
   }
 }

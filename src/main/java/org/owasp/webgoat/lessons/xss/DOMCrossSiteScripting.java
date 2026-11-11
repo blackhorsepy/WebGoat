@@ -30,14 +30,13 @@ public class DOMCrossSiteScripting implements AssignmentEndpoint {
   @ResponseBody
   public AttackResult completed(
       @RequestParam Integer param1, @RequestParam Integer param2, HttpServletRequest request) {
-    SecureRandom number = new SecureRandom();
-    lessonSession.setValue("randValue", String.valueOf(number.nextInt()));
-
     if (param1 == 42
         && param2 == 24
-        && request.getHeader("webgoat-requested-by").equals("dom-xss-vuln")) {
+        && "dom-xss-vuln".equals(request.getHeader("webgoat-requested-by"))) {
+      SecureRandom number = new SecureRandom();
+      lessonSession.setValue("randValue", String.valueOf(number.nextInt()));
       return success(this)
-          .output("phoneHome Response is " + lessonSession.getValue("randValue").toString())
+          .output("phoneHome Response is " + lessonSession.getValue("randValue"))
           .build();
     } else {
       return failed(this).build();

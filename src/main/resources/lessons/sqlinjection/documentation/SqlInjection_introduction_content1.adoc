@@ -36,3 +36,4 @@ If you are still struggling with SQL and need more information or practice, you 
 === It is your turn!
 Look at the example table and enter the last name of Bob Franco to retrieve his department.
 The application uses a fixed query and binds the last name as a value. The form does not accept SQL statements.
+Only the target last name, `Franco`, is accepted for this lookup.
