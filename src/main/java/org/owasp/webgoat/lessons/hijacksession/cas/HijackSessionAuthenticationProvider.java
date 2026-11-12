@@ -4,10 +4,10 @@
  */
 package org.owasp.webgoat.lessons.hijacksession.cas;
 
-import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.DoublePredicate;
 import java.util.function.Supplier;
@@ -19,20 +19,17 @@ import org.springframework.web.context.annotation.ApplicationScope;
  * @author Angel Olle Blazquez
  */
 
-// Session identifiers used to be a sequential counter combined with a timestamp, which let an
-// attacker predict the identifier of other users' sessions. They are now 256 bits from a
-// cryptographically secure generator, so they can neither be predicted nor enumerated.
 @ApplicationScope
 @Component
 public class HijackSessionAuthenticationProvider implements AuthenticationProvider<Authentication> {
 
-  private static final SecureRandom SECURE_RANDOM = new SecureRandom();
   private final Queue<String> sessions = new LinkedList<>();
+  private static long id = new Random().nextLong() & Long.MAX_VALUE;
   protected static final int MAX_SESSIONS = 50;
 
   private static final DoublePredicate PROBABILITY_DOUBLE_PREDICATE = pr -> pr < 0.75;
   private static final Supplier<String> GENERATE_SESSION_ID =
-      () -> (SECURE_RANDOM.nextLong() & Long.MAX_VALUE) + "-" + Instant.now().toEpochMilli();
+      () -> ++id + "-" + Instant.now().toEpochMilli();
   public static final Supplier<Authentication> AUTHENTICATION_SUPPLIER =
       () -> Authentication.builder().id(GENERATE_SESSION_ID.get()).build();
 

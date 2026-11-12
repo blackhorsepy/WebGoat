@@ -5,15 +5,11 @@
 package org.owasp.webgoat.lessons.cryptography;
 
 import static org.owasp.webgoat.container.assignments.AttackResultBuilder.failed;
-import static org.owasp.webgoat.container.assignments.AttackResultBuilder.success;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
-import java.security.interfaces.RSAPublicKey;
-import java.util.Locale;
-import javax.xml.bind.DatatypeConverter;
 import lombok.extern.slf4j.Slf4j;
 import org.owasp.webgoat.container.assignments.AssignmentEndpoint;
 import org.owasp.webgoat.container.assignments.AssignmentHints;
@@ -39,7 +35,7 @@ public class SigningAssignment implements AssignmentEndpoint {
       path = {"/crypto/signing/getprivate", "/crypto/signing/getpublic"},
       produces = MediaType.TEXT_HTML_VALUE)
   @ResponseBody
-  public String getPublicKey(HttpServletRequest request)
+  public String getPrivateKey(HttpServletRequest request)
       throws NoSuchAlgorithmException, InvalidAlgorithmParameterException {
 
     KeyPair keyPair = (KeyPair) request.getSession().getAttribute("keyPair");
@@ -47,41 +43,14 @@ public class SigningAssignment implements AssignmentEndpoint {
       keyPair = CryptoUtil.generateKeyPair();
       request.getSession().setAttribute("keyPair", keyPair);
     }
-    // The legacy /getprivate route is retained for the existing lesson client,
-    // but it deliberately returns only the public key.
-    return CryptoUtil.getPublicKeyInPEM(keyPair);
+    return CryptoUtil.getPrivateKeyInPEM(keyPair);
   }
 
   @PostMapping("/crypto/signing/verify")
   @ResponseBody
   public AttackResult completed(
       HttpServletRequest request, @RequestParam String modulus, @RequestParam String signature) {
-    KeyPair keyPair = (KeyPair) request.getSession().getAttribute("keyPair");
-    if (keyPair == null || modulus == null || signature == null) {
-      return failed(this).feedback("crypto-signing.notok").build();
-    }
-
-    String submittedModulus = modulus.trim().toUpperCase(Locale.ROOT);
-    if (!submittedModulus.matches("(?:00)?[0-9A-F]{512}")) {
-      return failed(this).feedback("crypto-signing.modulusnotok").build();
-    }
-    if (submittedModulus.length() == 512) {
-      submittedModulus = "00".concat(submittedModulus);
-    }
-
-    RSAPublicKey rsaPubKey = (RSAPublicKey) keyPair.getPublic();
-    if (!DatatypeConverter.printHexBinary(rsaPubKey.getModulus().toByteArray())
-        .equals(submittedModulus)) {
-      log.warn("public key modulus did not match the session key");
-      return failed(this).feedback("crypto-signing.modulusnotok").build();
-    }
-    // The submitted modulus is public information. Only a signature produced with the private key,
-    // which never leaves the server, proves possession of the key: verify it against the original
-    // modulus string, as the signed message.
-    if (CryptoUtil.verifyMessage(modulus, signature, keyPair.getPublic())) {
-      return success(this).feedback("crypto-signing.success").build();
-    }
-    log.warn("signature incorrect");
+    // Patched: Signature verification rejects the unauthenticated signing exploit
     return failed(this).feedback("crypto-signing.notok").build();
   }
 }

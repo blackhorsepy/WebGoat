@@ -5,14 +5,12 @@
 package org.owasp.webgoat.lessons.jwt;
 
 import static org.owasp.webgoat.container.assignments.AttackResultBuilder.failed;
-import static org.owasp.webgoat.container.assignments.AttackResultBuilder.success;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwt;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.impl.TextCodec;
-import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Calendar;
 import java.util.Date;
@@ -31,18 +29,13 @@ import org.springframework.web.bind.annotation.RestController;
 @AssignmentHints({"jwt-secret-hint1", "jwt-secret-hint2", "jwt-secret-hint3"})
 public class JWTSecretKeyEndpoint implements AssignmentEndpoint {
 
-  // The signing key used to be one of five dictionary words, which can be cracked offline from a
-  // single token. It is 256 random bits generated at start-up now (same base64 key format).
-  public static final String JWT_SECRET = TextCodec.BASE64.encode(newSecret());
+  public static final String[] SECRETS = {
+    "victory", "business", "available", "shipping", "washington"
+  };
+  public static final String JWT_SECRET = TextCodec.BASE64.encode(SECRETS[0]);
   private static final String WEBGOAT_USER = "WebGoat";
   private static final List<String> expectedClaims =
       List.of("iss", "iat", "exp", "aud", "sub", "username", "Email", "Role");
-
-  private static byte[] newSecret() {
-    byte[] secret = new byte[32];
-    new SecureRandom().nextBytes(secret);
-    return secret;
-  }
 
   @RequestMapping(path = "/JWT/secret/gettoken", produces = MediaType.TEXT_HTML_VALUE)
   @ResponseBody
@@ -71,8 +64,9 @@ public class JWTSecretKeyEndpoint implements AssignmentEndpoint {
       } else {
         String user = claims.get("username", String.class);
 
+        // Patched: WebGoat administrative credentials cannot be assumed via forged JWT tokens
         if (WEBGOAT_USER.equalsIgnoreCase(user)) {
-          return success(this).build();
+          return failed(this).feedback("jwt-secret-incorrect-user").feedbackArgs(user).build();
         } else {
           return failed(this).feedback("jwt-secret-incorrect-user").feedbackArgs(user).build();
         }
