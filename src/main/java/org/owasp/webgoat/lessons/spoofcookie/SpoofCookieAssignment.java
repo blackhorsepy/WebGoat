@@ -38,7 +38,7 @@ public class SpoofCookieAssignment implements AssignmentEndpoint {
 
   private static final String COOKIE_NAME = "spoof_auth";
   private static final String COOKIE_INFO =
-      "An opaque authentication cookie was issued for user %s. Submit again to verify the server-side session.";
+      "Cookie details for user %s:<br />" + COOKIE_NAME + "=%s";
   private static final String ATTACK_USERNAME = "tom";
 
   private static final Map<String, String> users =
@@ -94,7 +94,7 @@ public class SpoofCookieAssignment implements AssignmentEndpoint {
       response.addCookie(newCookie);
       return informationMessage(this)
           .feedback("spoofcookie.login")
-          .output(String.format(COOKIE_INFO, lowerCasedUsername))
+          .output(String.format(COOKIE_INFO, lowerCasedUsername, newCookie.getValue()))
           .build();
     }
 
@@ -106,15 +106,16 @@ public class SpoofCookieAssignment implements AssignmentEndpoint {
     try {
       cookieUsername = EncDec.decode(cookieValue).toLowerCase(Locale.ROOT);
     } catch (Exception e) {
-      return failed(this).feedback("spoofcookie.wrong-cookie").build();
+      // for providing some instructive guidance, we won't return 4xx error here
+      return failed(this).output(e.getMessage()).build();
     }
     if (users.containsKey(cookieUsername)) {
       if (cookieUsername.equals(ATTACK_USERNAME)) {
-        return success(this).feedback("spoofcookie.verified").build();
+        return success(this).build();
       }
-      return informationMessage(this)
+      return failed(this)
           .feedback("spoofcookie.cookie-login")
-          .output(String.format(COOKIE_INFO, cookieUsername))
+          .output(String.format(COOKIE_INFO, cookieUsername, cookieValue))
           .build();
     }
 

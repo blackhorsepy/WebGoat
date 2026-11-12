@@ -32,10 +32,13 @@ public class EncDec {
     cleanupExpiredSessions();
     byte[] tokenBytes = new byte[TOKEN_BYTES];
     SECURE_RANDOM.nextBytes(tokenBytes);
-    String token = Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
+    String user = value.toLowerCase(Locale.ROOT);
+    // Same presentation as before (username followed by a salt), but the salt is fresh random data
+    // for every issued cookie and the whole value is looked up on the server. Knowing the layout
+    // and one cookie therefore does not let anybody build a valid cookie for another user.
+    String token = user + HexFormat.of().formatHex(tokenBytes);
     SESSIONS.put(
-        token,
-        new Session(value.toLowerCase(Locale.ROOT), Instant.now().plusSeconds(SESSION_LIFETIME_SECONDS)));
+        token, new Session(user, Instant.now().plusSeconds(SESSION_LIFETIME_SECONDS)));
 
     while (SESSIONS.size() > MAX_SESSIONS) {
       String oldestToken = SESSIONS.keySet().stream().findFirst().orElse(null);
@@ -52,7 +55,7 @@ public class EncDec {
       return null;
     }
     String token = unwrapOrNull(encodedValue);
-    if (token == null || !token.matches("[A-Za-z0-9_-]{40,44}")) {
+    if (token == null || token.length() > 128) {
       throw new IllegalArgumentException("Invalid or expired cookie");
     }
 

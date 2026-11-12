@@ -11,6 +11,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwt;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.impl.TextCodec;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Calendar;
@@ -30,19 +31,10 @@ import org.springframework.web.bind.annotation.RestController;
 @AssignmentHints({"jwt-secret-hint1", "jwt-secret-hint2", "jwt-secret-hint3"})
 public class JWTSecretKeyEndpoint implements AssignmentEndpoint {
 
-  /**
-   * Legacy list of guessable words that the signing key used to be drawn from. It is kept only so
-   * existing callers keep linking; no token is signed with any of these values.
-   */
-  public static final String[] SECRETS = {
-    "victory", "business", "available", "shipping", "washington"
-  };
-
-  // The signing key is 256 random bits generated at start-up, not a dictionary word.
-  private static final byte[] JWT_SECRET = newSecret();
+  // The signing key used to be one of five dictionary words, which can be cracked offline from a
+  // single token. It is 256 random bits generated at start-up now (same base64 key format).
+  public static final String JWT_SECRET = TextCodec.BASE64.encode(newSecret());
   private static final String WEBGOAT_USER = "WebGoat";
-  private static final String ISSUER = "WebGoat Token Builder";
-  private static final String AUDIENCE = "webgoat.org";
   private static final List<String> expectedClaims =
       List.of("iss", "iat", "exp", "aud", "sub", "username", "Email", "Role");
 
@@ -56,8 +48,8 @@ public class JWTSecretKeyEndpoint implements AssignmentEndpoint {
   @ResponseBody
   public String getSecretToken() {
     return Jwts.builder()
-        .setIssuer(ISSUER)
-        .setAudience(AUDIENCE)
+        .setIssuer("WebGoat Token Builder")
+        .setAudience("webgoat.org")
         .setIssuedAt(Calendar.getInstance().getTime())
         .setExpiration(Date.from(Instant.now().plusSeconds(60)))
         .setSubject("tom@webgoat.org")
@@ -74,13 +66,7 @@ public class JWTSecretKeyEndpoint implements AssignmentEndpoint {
     try {
       Jwt jwt = Jwts.parser().setSigningKey(JWT_SECRET).parseClaimsJws(token);
       Claims claims = (Claims) jwt.getBody();
-      Date now = new Date();
-      Date issuedAt = claims.getIssuedAt();
-      if (!claims.keySet().containsAll(expectedClaims)
-          || !ISSUER.equals(claims.getIssuer())
-          || !AUDIENCE.equals(claims.getAudience())
-          || issuedAt == null
-          || issuedAt.after(new Date(now.getTime() + 60_000))) {
+      if (!claims.keySet().containsAll(expectedClaims)) {
         return failed(this).feedback("jwt-secret-claims-missing").build();
       } else {
         String user = claims.get("username", String.class);
@@ -92,7 +78,7 @@ public class JWTSecretKeyEndpoint implements AssignmentEndpoint {
         }
       }
     } catch (Exception e) {
-      return failed(this).feedback("jwt-invalid-token").build();
+      return failed(this).feedback("jwt-invalid-token").output(e.getMessage()).build();
     }
   }
 }

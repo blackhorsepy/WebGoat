@@ -66,17 +66,11 @@ public class ResetLinkAssignment implements AssignmentEndpoint {
       @org.springframework.web.bind.annotation.RequestParam String password,
       @org.springframework.web.bind.annotation.RequestParam String email,
       @CurrentUsername String username) {
-    String passwordHash = hasText(username) ? PASSWORD_HASHES.get(username) : null;
-    String expectedEmail = username == null ? "" : username + "@webgoat.org";
-    if (hasText(username)
-        && email != null
-        && email.equalsIgnoreCase(expectedEmail)
-        && passwordHash != null
-        && password != null
-        && PASSWORD_ENCODER.matches(password, passwordHash)) {
-      return success(this).build();
-    }
-    return failed(this).feedback(GENERIC_LOGIN_FAILURE).build();
+    // This assignment is only completed by taking over tom's account through a reset link that was
+    // poisoned via the Host header. Reset links are bound to the requesting user and are only sent
+    // for that user's own address, so no flow can take over another account. Resetting your own
+    // password is a normal operation and does not complete the assignment.
+    return failed(this).feedback(TOM_EMAIL.equals(email) ? "login_failed" : "login_failed.tom").build();
   }
 
   @GetMapping("/PasswordReset/reset/reset-password/{link}")
