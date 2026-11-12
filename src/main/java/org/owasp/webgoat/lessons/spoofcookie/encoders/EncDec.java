@@ -4,9 +4,11 @@
  */
 package org.owasp.webgoat.lessons.spoofcookie.encoders;
 
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.HexFormat;
 import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -42,28 +44,52 @@ public class EncDec {
       }
       SESSIONS.remove(oldestToken);
     }
-    return token;
+    return wrap(token);
   }
 
   public static String decode(final String encodedValue) throws IllegalArgumentException {
     if (encodedValue == null) {
       return null;
     }
-    if (encodedValue.length() > 64 || !encodedValue.matches("[A-Za-z0-9_-]{40,44}")) {
+    String token = unwrapOrNull(encodedValue);
+    if (token == null || !token.matches("[A-Za-z0-9_-]{40,44}")) {
       throw new IllegalArgumentException("Invalid or expired cookie");
     }
 
-    Session session = SESSIONS.get(encodedValue);
+    Session session = SESSIONS.get(token);
     if (session == null || !session.expiresAt().isAfter(Instant.now())) {
-      SESSIONS.remove(encodedValue);
+      SESSIONS.remove(token);
       throw new IllegalArgumentException("Invalid or expired cookie");
     }
     return session.username();
   }
 
-  public static void invalidate(final String token) {
+  public static void invalidate(final String encodedValue) {
+    String token = encodedValue == null ? null : unwrapOrNull(encodedValue);
     if (token != null) {
       SESSIONS.remove(token);
+    }
+  }
+
+  // The cookie keeps the lesson's familiar base64(hex(reversed(...))) presentation, but the wrapped
+  // content is only a random server-side session handle: it carries no username and no secret, so
+  // decoding it reveals nothing that could be used to build a cookie for another user.
+  private static String wrap(String token) {
+    String reversed = new StringBuilder(token).reverse().toString();
+    String hex = HexFormat.of().formatHex(reversed.getBytes(StandardCharsets.UTF_8));
+    return Base64.getEncoder().encodeToString(hex.getBytes(StandardCharsets.UTF_8));
+  }
+
+  private static String unwrapOrNull(String encoded) {
+    if (encoded.length() > 256) {
+      return null;
+    }
+    try {
+      String hex = new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
+      String reversed = new String(HexFormat.of().parseHex(hex), StandardCharsets.UTF_8);
+      return new StringBuilder(reversed).reverse().toString();
+    } catch (RuntimeException e) {
+      return null;
     }
   }
 

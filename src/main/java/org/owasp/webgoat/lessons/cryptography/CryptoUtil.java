@@ -33,7 +33,7 @@ public class CryptoUtil {
     return keyPairGenerator.generateKeyPair();
   }
 
-  static String getPrivateKeyInPEM(KeyPair keyPair) {
+  public static String getPrivateKeyInPEM(KeyPair keyPair) {
     String encodedString = "-----BEGIN PRIVATE KEY-----\n";
     encodedString =
         encodedString
@@ -51,7 +51,7 @@ public class CryptoUtil {
     return "-----BEGIN PUBLIC KEY-----\n" + encoded + "\n-----END PUBLIC KEY-----\n";
   }
 
-  static String signMessage(String message, PrivateKey privateKey) {
+  public static String signMessage(String message, PrivateKey privateKey) {
 
     log.debug("start signMessage");
     String signature = null;
@@ -103,7 +103,7 @@ public class CryptoUtil {
     return result;
   }
 
-  static boolean verifyAssignment(String modulus, String signature, PublicKey publicKey) {
+  public static boolean verifyAssignment(String modulus, String signature, PublicKey publicKey) {
 
     /* first check if the signature is correct, i.e. right private key and right hash */
     boolean result = false;
@@ -126,7 +126,7 @@ public class CryptoUtil {
     return result;
   }
 
-  static PrivateKey getPrivateKeyFromPEM(String privateKeyPem)
+  public static PrivateKey getPrivateKeyFromPEM(String privateKeyPem)
       throws NoSuchAlgorithmException, InvalidKeySpecException {
     privateKeyPem = privateKeyPem.replace("-----BEGIN PRIVATE KEY-----", "");
     privateKeyPem = privateKeyPem.replace("-----END PRIVATE KEY-----", "");

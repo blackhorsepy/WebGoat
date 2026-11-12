@@ -30,6 +30,15 @@ import org.springframework.web.bind.annotation.RestController;
 @AssignmentHints({"jwt-secret-hint1", "jwt-secret-hint2", "jwt-secret-hint3"})
 public class JWTSecretKeyEndpoint implements AssignmentEndpoint {
 
+  /**
+   * Legacy list of guessable words that the signing key used to be drawn from. It is kept only so
+   * existing callers keep linking; no token is signed with any of these values.
+   */
+  public static final String[] SECRETS = {
+    "victory", "business", "available", "shipping", "washington"
+  };
+
+  // The signing key is 256 random bits generated at start-up, not a dictionary word.
   private static final byte[] JWT_SECRET = newSecret();
   private static final String WEBGOAT_USER = "WebGoat";
   private static final String ISSUER = "WebGoat Token Builder";
